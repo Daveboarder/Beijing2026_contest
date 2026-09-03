@@ -1,0 +1,23 @@
+{
+  "preprocessing": {
+    "repair_outlier_shots": true,
+    "outlier_z": 4.0,
+    "bulk_fraction": 0.3,
+    "normalization_reference": "shot",
+    "baseline": "none",
+    "snip_iterations": 40,
+    "normalization": "l2",
+    "wl_min": null,
+    "wl_max": null
+  },
+  "cv": {
+    "n_splits": 5,
+    "n_repeats": 4,
+    "random_state": 42
+  },
+  "encoding": "mean",
+  "n_bins": 8,
+  "n_groups": 16,
+  "bin_factor": 4,
+  "n_pca": 30
+}

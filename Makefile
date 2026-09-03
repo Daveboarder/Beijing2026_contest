@@ -1,0 +1,49 @@
+N_JOBS ?= 12
+MODEL  ?= pca_mlp
+# Everything runs through the uv-managed environment; `uv run` syncs it first.
+PY     ?= uv run python
+PY_CNN ?= uv run --extra cnn python
+
+.PHONY: all setup prepare explore benchmark benchmark-groups preprocessing tune submission cnn cnn-submit lint clean-cache
+
+all: prepare explore benchmark
+
+setup:
+	uv sync --all-groups
+
+setup-cnn:
+	uv sync --extra cnn --all-groups
+
+prepare:
+	$(PY) scripts/01_prepare_data.py --n-jobs $(N_JOBS)
+
+explore:
+	$(PY) scripts/02_explore_data.py --n-jobs $(N_JOBS)
+
+benchmark:
+	$(PY) scripts/03_benchmark_models.py --n-jobs $(N_JOBS)
+
+benchmark-groups:
+	$(PY) scripts/03_benchmark_models.py --n-jobs $(N_JOBS) --n-groups 4
+
+preprocessing:
+	$(PY) scripts/04_compare_preprocessing.py --n-jobs $(N_JOBS)
+
+tune:
+	$(PY) scripts/05_tune_model.py --model $(MODEL) --n-jobs $(N_JOBS)
+
+submission:
+	$(PY) scripts/06_predict_submission.py --model $(MODEL) \
+		--params results/models/best_params_$(MODEL).json --n-jobs $(N_JOBS)
+
+cnn:
+	$(PY_CNN) scripts/09_benchmark_cnn.py --n-jobs $(N_JOBS)
+
+cnn-submit:
+	$(PY_CNN) scripts/10_predict_cnn.py --n-jobs $(N_JOBS)
+
+lint:
+	uv run ruff check src scripts
+
+clean-cache:
+	rm -rf cache/features cache/images

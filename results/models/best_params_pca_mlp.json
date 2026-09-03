@@ -1,0 +1,14 @@
+{
+  "model": "pca_mlp",
+  "n_groups": 4,
+  "bin_factor": 1,
+  "params": {
+    "clf__alpha": 0.0001,
+    "clf__hidden_layer_sizes": [
+      256,
+      128
+    ],
+    "pca__n_components": 30
+  },
+  "cv_accuracy": 0.6738550724637682
+}

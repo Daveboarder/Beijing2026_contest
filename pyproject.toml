@@ -1,0 +1,62 @@
+[project]
+name = "libs2026"
+version = "0.1.0"
+description = "Steel aging-state classification from LIBS spectra (LIBS 2026 contest)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "scipy>=1.11",
+    "scikit-learn>=1.4",
+    "matplotlib>=3.8",
+    "joblib>=1.3",
+    "pyyaml>=6.0",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+# Gradient-boosting libraries; the model zoo works without them.
+boosting = [
+    "xgboost>=2.0",
+    "lightgbm>=4.0",
+]
+# 2D CNN over (shots x wavelengths) "images".
+cnn = [
+    "torch>=2.2",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29",
+    "jupyterlab>=4.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/libs2026"]
+
+[tool.uv]
+# The uv cache and this project sit on different filesystems on the group
+# server, so hardlinking is not available and would warn on every command.
+link-mode = "copy"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# Channel bounds are paired by construction, so strict= adds noise, not safety.
+ignore = ["B905"]
+
+[tool.ruff.lint.per-file-ignores]
+# scripts/_bootstrap.py must be imported before libs2026, so import order there
+# is load-bearing and cannot be sorted.
+"scripts/*" = ["I001"]

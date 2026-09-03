@@ -1,0 +1,11 @@
+cache/
+results/models/*.joblib
+results/predictions/*.csv
+submissions/*.csv
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+env/
+.ruff_cache/
+.DS_Store

@@ -1,0 +1,72 @@
+# Configuration for the LIBS 2026 steel aging-state classification contest.
+# Paths may be absolute or relative to the project root.
+
+paths:
+  raw_data: ../../../Data/competition_data_release/competition_data_release
+  cache: cache
+  results: results
+  submissions: submissions
+
+data:
+  # The 200 shots are fired into one spot, so shot index is a depth coordinate
+  # and their order is meaningful. Never shuffle or drop shots.
+  n_shots: 200
+  n_wavelengths: 12282
+  # Row index where each spectrometer channel starts (last entry = end of array).
+  channel_bounds: [0, 4094, 8188, 12282]
+
+features:
+  # mean | mean_lines | lines | depth_bins | depth_contrast | depth_profile | mean_depth
+  # (see src/libs2026/depth.py). Shot index is a depth coordinate: steel ages
+  # from the surface inwards, so the spectrum *changes* from shot 1 to 200.
+  # Full-spectrum depth encodings are noise-dominated; mean_lines keeps the
+  # average spectrum and appends compact depth curves of diagnostic lines.
+  encoding: mean_lines
+  n_bins: 8                 # log-spaced depth bins, fine near the surface
+  # blocks | interleaved | surface: how the n_groups rows per sample are drawn.
+  # "surface" uses only the first half of the depth profile (where classes
+  # separate) and avoids labelling deep bulk shots with the aging level.
+  # "blocks" over the full 200 shots is still competitive as data augmentation.
+  augment: surface
+
+preprocessing:
+  # Outlier shots are repaired by interpolation, never deleted: shot index is
+  # the depth coordinate, so removing a shot would shift the whole profile.
+  repair_outlier_shots: true
+  outlier_z: 4.0
+  # Outliers are judged against the local depth trend over this many neighbouring
+  # shots. A global threshold would flag the whole (informative) surface region.
+  outlier_window: 11
+  # Trailing fraction of shots treated as unaffected bulk material.
+  bulk_fraction: 0.3
+  # "bulk" derives one intensity scale per sample from the bulk shots and keeps
+  # the depth intensity profile; "shot" rescales every shot and flattens it away.
+  # Keep "bulk" when using mean_lines / depth encodings so dip depths stay
+  # meaningful. "shot" can still help pure mean-spectrum baselines.
+  normalization_reference: bulk
+  # Baseline removal is off on purpose: the sweep in
+  # results/metrics/preprocessing_sweep_g1_b1.csv shows SNIP costs ~5 accuracy
+  # points, i.e. the plasma continuum itself carries aging information.
+  baseline: none            # none | snip
+  snip_iterations: 40
+  normalization: l2         # none | tic | max | snv | l2
+  # Wavelength region kept for modelling (nm). null = keep everything.
+  wl_min: null
+  wl_max: null
+
+cv:
+  n_splits: 5
+  n_repeats: 4
+  random_state: 42
+
+cnn:
+  # Wavelength binning for the 2-D CNN (200 x W image). 8 → ~1535 columns.
+  bin_factor: 8
+  epochs: 80
+  batch_size: 16
+  lr: 0.001
+  dropout: 0.4
+  channels: [16, 32, 64, 128]
+
+output:
+  submission_name: predictions.csv

@@ -1,0 +1,20 @@
+{
+  "preprocessing": {
+    "drop_outlier_shots": true,
+    "outlier_z": 4.0,
+    "baseline": "none",
+    "snip_iterations": 40,
+    "normalization": "l2",
+    "wl_min": null,
+    "wl_max": null
+  },
+  "cv": {
+    "n_splits": 5,
+    "n_repeats": 4,
+    "random_state": 42
+  },
+  "n_groups": 4,
+  "bin_factor": 1,
+  "stats": false,
+  "n_pca": 30
+}

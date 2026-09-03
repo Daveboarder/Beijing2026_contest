@@ -1,0 +1,11 @@
+{
+  "model": "pca_svm_rbf",
+  "n_groups": 1,
+  "bin_factor": 1,
+  "params": {
+    "clf__C": 10.0,
+    "clf__gamma": 0.001,
+    "pca__n_components": 80
+  },
+  "cv_accuracy": 0.6653188405797101
+}
