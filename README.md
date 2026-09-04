@@ -47,6 +47,8 @@ src/libs2026/             the library
   preprocessing.py        shot screening, SNIP baseline, normalisation
   features.py             sample-level feature matrices (+ caching)
   models.py               the classifier zoo, incl. a PLS-DA implementation
+  images.py               (shots x wavelengths) image tensors for the CNN
+  cnn.py                  2-D CNN over depth-spectrum images (needs torch)
   evaluation.py           grouped stratified CV, sample-level scoring
   plotting.py             figures
 scripts/                  numbered pipeline stages, run in order
@@ -55,6 +57,7 @@ results/                  metrics, figures, fitted models, OOF predictions
 submissions/              contest-format CSVs
 ```
 
+Optional extras: `uv sync --extra cnn` for PyTorch, `uv sync --extra boosting` for XGBoost/LightGBM.
 ## Environment
 
 The project is managed with [uv](https://docs.astral.sh/uv/). One command
@@ -205,21 +208,28 @@ accuracy cost, which is useful when a search would otherwise be too slow.
 
 ## 2-D CNN on depth-spectrum images
 
-Each sample is kept as a single-channel image of shape
-`(n_shots, n_wavelengths)` — rows are depth (shot order), columns are the
-spectrum. A small CNN (`DepthSpectrumCNN`) learns local patterns that couple
-the two axes (for example the aged-layer dip of a diagnostic line).
+Each sample is kept as a single-channel image — rows are depth (shot order),
+columns are the spectrum — so a CNN can learn patterns that couple the two axes
+(for example the aged-layer dip of a diagnostic line).
 
 ```bash
 uv sync --extra cnn          # or: make setup-cnn
-uv run --extra cnn python scripts/09_benchmark_cnn.py --bin-factor 8
+uv run --extra cnn python scripts/09_benchmark_cnn.py
 # or: make cnn
 ```
 
-Wavelengths are binned by default (`bin_factor=8` → ~1533 columns) so the
-image stays tractable with only 120 training samples. Training uses class-
-weighted cross-entropy, wavelength-shift / noise augmentation, and early
-stopping. GPU is used automatically when available.
+Practical details for a 120-sample training set:
+
+* Wavelengths are binned (`--bin-factor 8`) and consecutive shots averaged
+  (`--shot-bin 4`) → images of shape roughly `(50, 1533)`.
+* Inside each CV fold every shot is projected onto a shared spectral PCA basis
+  (`--spectral-pca 64`). Without that compression the CNN barely beats the
+  majority-class baseline; with it, the network can fit the training set and
+  generalise.
+* Global average pooling is *not* used over the whole image — that would erase
+  the depth axis. Wavelength is pooled away; a few depth bins are kept for the
+  classifier head.
+* GPU is used automatically when available (this host falls back to CPU).
 
 ## Working with more rows per sample
 

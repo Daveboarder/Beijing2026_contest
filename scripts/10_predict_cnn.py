@@ -8,7 +8,6 @@ from datetime import datetime
 
 import _bootstrap  # noqa: F401
 import joblib
-import numpy as np
 import pandas as pd
 
 from libs2026 import Config, Preprocessor
@@ -30,11 +29,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default=None)
     parser.add_argument("--bin-factor", type=int, default=8)
-    parser.add_argument("--epochs", type=int, default=80)
+    parser.add_argument("--shot-bin", type=int, default=4)
+    parser.add_argument("--epochs", type=int, default=120)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--dropout", type=float, default=0.4)
-    parser.add_argument("--channels", default="16,32,64,128")
+    parser.add_argument("--dropout", type=float, default=0.3)
+    parser.add_argument("--spectral-pca", type=int, default=64)
+    parser.add_argument("--channels", default="32,64,128")
     parser.add_argument("--n-jobs", type=int, default=8)
     parser.add_argument("--device", default=None)
     parser.add_argument("--name", default=None)
@@ -46,15 +47,16 @@ def main() -> None:
     channels = tuple(int(c) for c in args.channels.split(",") if c.strip())
 
     images = build_images(cfg, Preprocessor.from_config(cfg),
-                          bin_factor=args.bin_factor, n_jobs=args.n_jobs)
+                          bin_factor=args.bin_factor, shot_bin=args.shot_bin,
+                          n_jobs=args.n_jobs)
     train, test = images.subset("train"), images.subset("test")
     n_shots, n_wl = train.image_shape
 
     model = SpectrumCNN(
-        n_shots=n_shots, n_wavelengths=n_wl, channels=channels,
-        dropout=args.dropout, epochs=args.epochs, batch_size=args.batch_size,
-        lr=args.lr, device=args.device, verbose=args.verbose,
-        random_state=cfg["cv"]["random_state"],
+        n_shots=n_shots, n_wavelengths=n_wl, spectral_pca=args.spectral_pca,
+        channels=channels, dropout=args.dropout, epochs=args.epochs,
+        batch_size=args.batch_size, lr=args.lr, device=args.device,
+        verbose=args.verbose, random_state=cfg["cv"]["random_state"],
     )
     model.fit(train.as_flat(), train.y.astype(int))
     proba = model.predict_proba(test.as_flat())

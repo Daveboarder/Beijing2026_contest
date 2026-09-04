@@ -60,13 +60,16 @@ cv:
   random_state: 42
 
 cnn:
-  # Wavelength binning for the 2-D CNN (200 x W image). 8 → ~1535 columns.
+  # Wavelength / shot binning for the 2-D CNN image. Defaults yield ~50 x 1533.
   bin_factor: 8
-  epochs: 80
+  shot_bin: 4
+  # Per-fold spectral PCA width; 0 disables it (not recommended with N=120).
+  spectral_pca: 48
+  epochs: 150
   batch_size: 16
   lr: 0.001
   dropout: 0.4
-  channels: [16, 32, 64, 128]
+  channels: [32, 64, 128]
 
 output:
   submission_name: predictions.csv

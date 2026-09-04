@@ -18,7 +18,7 @@ from joblib import Parallel, delayed
 
 from .config import Config
 from .data import load_index, load_shots, load_wavelength
-from .features import bin_spectrum, _bin_axis
+from .features import _bin_axis, bin_spectrum
 from .preprocessing import Preprocessor
 
 
@@ -37,7 +37,7 @@ class ImageSet:
         # One image per sample, so the group id equals the row index.
         self.groups = np.arange(len(self.sample_ids))
 
-    def subset(self, split: str) -> "ImageSet":
+    def subset(self, split: str) -> ImageSet:
         mask = self.split == split
         y = self.y[mask] if self.y is not None else None
         return ImageSet(
@@ -57,10 +57,13 @@ class ImageSet:
 
 
 def _one_image(cfg: Config, sample_id: str, pre: Preprocessor,
-               bin_factor: int, bounds) -> np.ndarray:
+               bin_factor: int, shot_bin: int, bounds) -> np.ndarray:
     shots = pre(load_shots(cfg, sample_id, mmap=False))
     if bin_factor > 1:
         shots = bin_spectrum(shots, bin_factor, bounds)
+    if shot_bin > 1:
+        n = (shots.shape[0] // shot_bin) * shot_bin
+        shots = shots[:n].reshape(n // shot_bin, shot_bin, shots.shape[1]).mean(axis=1)
     return np.asarray(shots, dtype=np.float32)
 
 
@@ -68,20 +71,22 @@ def build_images(
     cfg: Config,
     pre: Preprocessor | None = None,
     bin_factor: int = 8,
+    shot_bin: int = 1,
     n_jobs: int = 8,
     use_cache: bool = True,
 ) -> ImageSet:
     """Preprocess every sample into a ``(n_shots, n_wavelengths)`` image.
 
-    Wavelengths are binned by ``bin_factor`` (default 8 → ~1535 columns): a raw
-    200 x 12282 image is too wide for a small dataset, and neighbouring
-    spectrometer pixels are highly correlated anyway.
+    Wavelengths are binned by ``bin_factor`` (default 8 → ~1535 columns) and
+    consecutive shots can be averaged by ``shot_bin`` so the image stays
+    tractable. Neighbouring spectrometer pixels and successive shots are highly
+    correlated, so this is mostly denoising, not information loss.
     """
     pre = pre or Preprocessor.from_config(cfg)
     bounds = tuple(cfg["data"].get("channel_bounds", (0, 4094, 8188, 12282)))
 
     key = json.dumps(
-        {"pre": asdict(pre), "bin": bin_factor, "kind": "image"},
+        {"pre": asdict(pre), "bin": bin_factor, "shot_bin": shot_bin, "kind": "image"},
         sort_keys=True, default=str,
     )
     digest = hashlib.md5(key.encode()).hexdigest()[:12]
@@ -99,7 +104,7 @@ def build_images(
 
     index = load_index(cfg)
     arrays = Parallel(n_jobs=n_jobs, verbose=5)(
-        delayed(_one_image)(cfg, sid, pre, bin_factor, bounds)
+        delayed(_one_image)(cfg, sid, pre, bin_factor, shot_bin, bounds)
         for sid in index["sample_id"]
     )
     X = np.stack(arrays, axis=0)

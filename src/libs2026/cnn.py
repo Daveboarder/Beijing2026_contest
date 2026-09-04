@@ -49,10 +49,6 @@ if torch is not None:
                       padding=(k_depth // 2, k_wl // 2), bias=False),
             nn.GroupNorm(min(8, out_ch), out_ch),
             nn.GELU(),
-            nn.Conv2d(out_ch, out_ch, kernel_size=(k_depth, k_wl),
-                      padding=(k_depth // 2, k_wl // 2), bias=False),
-            nn.GroupNorm(min(8, out_ch), out_ch),
-            nn.GELU(),
             nn.MaxPool2d(kernel_size=pool),
         )
 
@@ -67,7 +63,7 @@ if torch is not None:
         def __init__(self, n_classes: int = 5, channels: tuple[int, ...] = (32, 64, 128),
                      dropout: float = 0.3, depth_bins: int = 8):
             super().__init__()
-            pools = [(2, 4), (2, 4), (2, 4)]
+            pools = [(2, 2), (2, 2), (2, 2)]
             layers = []
             in_ch = 1
             for i, out_ch in enumerate(channels):
@@ -114,30 +110,37 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
 
     ``X`` may be the flattened image matrix from :meth:`ImageSet.as_flat` so the
     estimator plugs into the existing grouped cross-validation helpers.
+
+    With only 120 labelled samples a raw ``(shots x 1000+)`` image is too wide
+    for a CNN to learn from. ``spectral_pca`` projects every shot onto a shared
+    spectral basis (fit inside each fold) so the network sees a compact
+    ``(shots x n_components)`` image where depth structure is preserved.
     """
 
     def __init__(
         self,
-        n_shots: int = 200,
+        n_shots: int = 50,
         n_wavelengths: int = 1535,
+        spectral_pca: int = 64,
         channels: tuple[int, ...] = (32, 64, 128),
         dropout: float = 0.3,
-        epochs: int = 100,
-        batch_size: int = 8,
-        lr: float = 3e-4,
-        weight_decay: float = 1e-3,
-        patience: int = 25,
-        val_fraction: float = 0.2,
-        noise_std: float = 0.03,
-        wl_shift: int = 8,
+        epochs: int = 120,
+        batch_size: int = 16,
+        lr: float = 1e-3,
+        weight_decay: float = 1e-4,
+        patience: int = 30,
+        val_fraction: float = 0.0,
+        noise_std: float = 0.05,
+        wl_shift: int = 0,
         label_smoothing: float = 0.05,
-        log_intensity: bool = True,
+        log_intensity: bool = False,
         device: str | None = None,
         random_state: int = 42,
         verbose: int = 0,
     ):
         self.n_shots = n_shots
         self.n_wavelengths = n_wavelengths
+        self.spectral_pca = spectral_pca
         self.channels = channels
         self.dropout = dropout
         self.epochs = epochs
@@ -160,38 +163,60 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
             return torch.device(self.device)
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def _augment(self, batch: "torch.Tensor", rng: np.random.Generator) -> "torch.Tensor":
+    def _augment(self, batch: torch.Tensor, rng: np.random.Generator) -> torch.Tensor:
         """Cheap on-the-fly augmentations that respect the depth axis."""
         out = batch
         if self.noise_std > 0:
             out = out + self.noise_std * torch.randn_like(out)
         if self.wl_shift > 0 and out.shape[0] > 0:
-            # One shared wavelength roll per batch item, applied with gather —
-            # never scramble the depth (shot) axis.
             shifts = rng.integers(-self.wl_shift, self.wl_shift + 1, size=out.shape[0])
             w = out.shape[-1]
             base = torch.arange(w, device=out.device)
-            # idx[b, j] = (j - shift[b]) mod W
             idx = (base.unsqueeze(0) - torch.as_tensor(shifts, device=out.device).unsqueeze(1)) % w
             idx = idx.view(out.shape[0], 1, 1, w).expand_as(out)
             out = torch.gather(out, -1, idx)
         return out
 
+    def _prepare_images(self, images: np.ndarray, fit_pca: bool,
+                        train_idx: np.ndarray | None = None) -> np.ndarray:
+        """Optional log, spectral PCA, and standardisation → ``(N,1,H,W)``."""
+        from sklearn.decomposition import PCA
+
+        if self.log_intensity:
+            images = np.log1p(np.maximum(images, 0.0))
+
+        if self.spectral_pca and self.spectral_pca > 0:
+            n, h, w = images.shape
+            flat = images.reshape(-1, w)
+            if fit_pca:
+                n_comp = min(self.spectral_pca, flat.shape[0] - 1, w)
+                # PCA is fit on training shots only when train_idx is given.
+                src = images[train_idx].reshape(-1, w) if train_idx is not None else flat
+                self.pca_ = PCA(n_components=n_comp, random_state=self.random_state).fit(src)
+            images = self.pca_.transform(flat).reshape(n, h, -1).astype(np.float32)
+
+        if fit_pca:
+            src = images[train_idx] if train_idx is not None else images
+            self.mean_ = float(src.mean())
+            self.std_ = float(src.std()) + 1e-6
+            self.log_intensity_ = bool(self.log_intensity)
+            self.width_ = images.shape[-1]
+
+        return ((images - self.mean_) / self.std_)[:, None, :, :].astype(np.float32)
+
     def fit(self, X, y):
         _require_torch()
         device = self._resolve_device()
-        images = _to_images(X, self.n_shots, self.n_wavelengths)
+        images = _to_images(X, self.n_shots, self.n_wavelengths)[:, 0]  # (N,H,W)
         y = np.asarray(y)
         self.classes_, y_idx = np.unique(y, return_inverse=True)
         n_classes = len(self.classes_)
 
-        # Stratified hold-out inside the fold for early stopping.
         rng = np.random.default_rng(self.random_state)
         val_idx = np.array([], dtype=int)
         train_idx = np.arange(len(y_idx))
         if self.val_fraction > 0 and len(y_idx) >= 20:
-            val_idx = []
-            train_idx = []
+            val_idx, train_idx = [], []
             for c in range(n_classes):
                 members = np.flatnonzero(y_idx == c)
                 rng.shuffle(members)
@@ -201,19 +226,11 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
             val_idx = np.asarray(val_idx, dtype=int)
             train_idx = np.asarray(train_idx, dtype=int)
 
-        # Channel-wise standardisation from the training split only.
-        train_imgs = images[train_idx]
-        if self.log_intensity:
-            train_imgs = np.log1p(np.maximum(train_imgs, 0.0))
-            images = np.log1p(np.maximum(images, 0.0))
-        self.mean_ = float(train_imgs.mean())
-        self.std_ = float(train_imgs.std()) + 1e-6
-        self.log_intensity_ = bool(self.log_intensity)
+        prepared = self._prepare_images(images, fit_pca=True, train_idx=train_idx)
 
         def pack(idxs):
-            arr = (images[idxs] - self.mean_) / self.std_
             return (
-                torch.from_numpy(arr),
+                torch.from_numpy(prepared[idxs]),
                 torch.from_numpy(y_idx[idxs].astype(np.int64)),
             )
 
@@ -221,8 +238,7 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
         train_loader = DataLoader(
             TensorDataset(x_train, y_train),
             batch_size=min(self.batch_size, len(train_idx)),
-            shuffle=True,
-            drop_last=False,
+            shuffle=True, drop_last=False,
         )
 
         counts = np.bincount(y_idx[train_idx], minlength=n_classes).astype(np.float64)
@@ -255,8 +271,7 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
                 net.eval()
                 with torch.no_grad():
                     xv, yv = pack(val_idx)
-                    logits = net(xv.to(device))
-                    pred = logits.argmax(dim=1).cpu().numpy()
+                    pred = net(xv.to(device)).argmax(dim=1).cpu().numpy()
                     val_acc = float((pred == y_idx[val_idx]).mean())
                 if val_acc > best_val + 1e-4:
                     best_val, wait = val_acc, 0
@@ -269,6 +284,15 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
                         break
                 if self.verbose and (epoch + 1) % 10 == 0:
                     print(f"epoch {epoch + 1:3d}  val_acc={val_acc:.3f}")
+            elif self.verbose and (epoch + 1) % 20 == 0:
+                net.eval()
+                with torch.no_grad():
+                    pred = net(x_train.to(device)).argmax(dim=1).cpu().numpy()
+                print(
+                    f"epoch {epoch + 1:3d}  "
+                    f"train_acc={float((pred == y_idx[train_idx]).mean()):.3f}"
+                )
+                best_state = {k: v.detach().cpu().clone() for k, v in net.state_dict().items()}
             else:
                 best_state = {k: v.detach().cpu().clone() for k, v in net.state_dict().items()}
 
@@ -283,13 +307,11 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
     def _logits(self, X) -> np.ndarray:
         check_is_fitted(self, "net_")
         _require_torch()
-        images = _to_images(X, self.n_shots, self.n_wavelengths)
-        if getattr(self, "log_intensity_", False):
-            images = np.log1p(np.maximum(images, 0.0))
-        images = (images - self.mean_) / self.std_
+        images = _to_images(X, self.n_shots, self.n_wavelengths)[:, 0]
+        prepared = self._prepare_images(images, fit_pca=False)
         self.net_.eval()
         with torch.no_grad():
-            logits = self.net_(torch.from_numpy(images))
+            logits = self.net_(torch.from_numpy(prepared))
         return logits.numpy()
 
     def predict_proba(self, X):
@@ -301,6 +323,5 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
     def predict(self, X):
         return self.classes_[self._logits(X).argmax(axis=1)]
 
-    def __sklearn_tags__(self) -> Any:  # pragma: no cover - sklearn 1.6+
-        tags = super().__sklearn_tags__()
-        return tags
+    def __sklearn_tags__(self) -> Any:  # pragma: no cover
+        return super().__sklearn_tags__()

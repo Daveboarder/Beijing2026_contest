@@ -23,10 +23,14 @@ def main() -> None:
     parser.add_argument("--config", default=None)
     parser.add_argument("--bin-factor", type=int, default=8,
                         help="average neighbouring wavelength pixels (default 8)")
-    parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--lr", type=float, default=3e-4)
-    parser.add_argument("--dropout", type=float, default=0.3)
+    parser.add_argument("--shot-bin", type=int, default=4,
+                        help="average consecutive shots (default 4 → 50-row images)")
+    parser.add_argument("--epochs", type=int, default=150)
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--dropout", type=float, default=0.4)
+    parser.add_argument("--spectral-pca", type=int, default=48,
+                        help="project each shot onto this many PCA components (0=off)")
     parser.add_argument("--channels", default="32,64,128",
                         help="comma-separated conv channel widths")
     parser.add_argument("--norm-reference", default="shot", choices=["shot", "bulk"],
@@ -46,7 +50,8 @@ def main() -> None:
     base = Preprocessor.from_config(cfg)
     pre = replace(base, normalization_reference=args.norm_reference)
 
-    images = build_images(cfg, pre, bin_factor=args.bin_factor, n_jobs=args.n_jobs)
+    images = build_images(cfg, pre, bin_factor=args.bin_factor,
+                          shot_bin=args.shot_bin, n_jobs=args.n_jobs)
     train = images.subset("train")
     n_shots, n_wl = train.image_shape
     y = train.y.astype(int)
@@ -58,6 +63,7 @@ def main() -> None:
     model = SpectrumCNN(
         n_shots=n_shots,
         n_wavelengths=n_wl,
+        spectral_pca=args.spectral_pca,
         channels=channels,
         dropout=args.dropout,
         epochs=args.epochs,
@@ -79,7 +85,7 @@ def main() -> None:
           f"bal_acc={result.balanced_accuracy:.3f}  "
           f"macroF1={result.macro_f1:.3f}  ({result.fit_seconds:.1f}s)")
 
-    tag = args.tag or f"cnn2d_b{args.bin_factor}"
+    tag = args.tag or f"cnn2d_b{args.bin_factor}_s{args.shot_bin}"
     summary = summarize([result])
     summary.insert(1, "bin_factor", args.bin_factor)
     summary.insert(2, "n_shots", n_shots)
