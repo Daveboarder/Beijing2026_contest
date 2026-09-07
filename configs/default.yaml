@@ -111,6 +111,9 @@ tokens:
     # Skip lines buried in noise: absent transitions carry no information.
     min_snr: 3.0
     maxfev: 600
+    # Fitted centroid may not walk more than this many pixels from the
+    # theoretical wavelength, otherwise the Voigt claims a neighbouring line.
+    max_shift_pixels: 1.5
 
 output:
   submission_name: predictions.csv

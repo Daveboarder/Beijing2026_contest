@@ -363,7 +363,7 @@ class TokenCNN(ClassifierMixin, BaseEstimator):
         feature_mean: np.ndarray | None = None,
         feature_std: np.ndarray | None = None,
         n_rows: int = 50,
-        n_lines: int = 1005,
+        n_lines: int = 722,
         n_features: int = 7,
         channels: tuple[int, ...] = (32, 64, 128),
         dropout: float = 0.4,
@@ -470,7 +470,9 @@ class TokenCNN(ClassifierMixin, BaseEstimator):
     def fit(self, X, y):
         _require_torch()
         if self.static is None or self.feature_mean is None or self.feature_std is None:
-            raise ValueError("TokenCNN needs static, feature_mean and feature_std from the TokenSet")
+            raise ValueError(
+                "TokenCNN needs static, feature_mean and feature_std from the TokenSet"
+            )
         device = self._resolve_device()
         y = np.asarray(y)
         self.classes_, y_idx = np.unique(y, return_inverse=True)

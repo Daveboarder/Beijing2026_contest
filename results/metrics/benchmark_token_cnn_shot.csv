@@ -1,0 +1,2 @@
+model,norm_reference,n_lines,accuracy,balanced_accuracy,macro_f1,seed_mean,seed_std
+token_cnn_shot,shot,722,0.5416666666666666,0.4648901098901098,0.46263787298270065,0.5033333333333333,0.0291547594742265

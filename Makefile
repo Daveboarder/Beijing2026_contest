@@ -4,7 +4,7 @@ MODEL  ?= pca_mlp
 PY     ?= uv run python
 PY_CNN ?= uv run --extra cnn python
 
-.PHONY: all setup prepare explore benchmark benchmark-groups preprocessing tune submission cnn cnn-submit lint clean-cache
+.PHONY: all setup prepare explore benchmark benchmark-groups preprocessing tune submission cnn cnn-submit tokens token-cnn token-submit lint clean-cache
 
 all: prepare explore benchmark
 
@@ -45,8 +45,17 @@ cnn-tune:
 cnn-submit:
 	$(PY_CNN) scripts/10_predict_cnn.py --device cuda --n-jobs $(N_JOBS)
 
+tokens:
+	$(PY) scripts/12_build_tokens.py --n-jobs $(N_JOBS)
+
+token-cnn:
+	$(PY_CNN) scripts/13_benchmark_token_cnn.py --device cuda --n-jobs $(N_JOBS)
+
+token-submit:
+	$(PY_CNN) scripts/14_predict_token_cnn.py --device cuda --n-jobs $(N_JOBS)
+
 lint:
 	uv run ruff check src scripts
 
 clean-cache:
-	rm -rf cache/features cache/images
+	rm -rf cache/features cache/images cache/tokens cache/lines

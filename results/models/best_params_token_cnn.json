@@ -1,17 +1,23 @@
 {
   "model": "token_cnn",
-  "cv_accuracy": 0.525,
-  "balanced_accuracy": 0.45489010989010986,
-  "macro_f1": 0.4530928771203371,
+  "cv_accuracy": 0.5416666666666666,
+  "balanced_accuracy": 0.4648901098901098,
+  "macro_f1": 0.46263787298270065,
   "seed_accuracies": [
-    0.4166666666666667,
+    0.5333333333333333,
     0.5083333333333333,
-    0.4583333333333333,
-    0.38333333333333336,
-    0.4666666666666667
+    0.5,
+    0.525,
+    0.45
   ],
+  "pixel_cnn_cv": 0.575,
+  "classical_pca_mlp_oof": 0.715,
+  "blend_accuracy": 0.7229166666666667,
+  "blend_w_cnn": 0.5,
+  "blend_partner": "pca_mlp",
+  "stack_lr_accuracy": 0.6916666666666667,
   "params": {
-    "norm_reference": "bulk",
+    "norm_reference": "shot",
     "shot_bin": 4,
     "n_lines": 722,
     "channels": [
@@ -31,6 +37,17 @@
       123,
       99,
       2026
-    ]
-  }
+    ],
+    "blend_oof": "pca_mlp",
+    "blend_weight": 0.5
+  },
+  "classical_pca_mlp_oof_std": 0.041,
+  "blend_accuracy_std": 0.03300620732865597,
+  "blend_protocol": "mean_of_repeats",
+  "blend_vs_pca_mlp_best_acc": 0.7229166666666667,
+  "blend_vs_pca_mlp_w_token": 0.5,
+  "pca_mlp_oof_acc": 0.715,
+  "blend_vs_pixel_cnn_best_acc": 0.6083333333333334,
+  "blend_vs_pixel_cnn_w_token": 0.6,
+  "pixel_cnn_oof_acc": 0.583
 }

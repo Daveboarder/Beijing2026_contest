@@ -15,7 +15,6 @@ from datetime import datetime
 
 import _bootstrap  # noqa: F401
 import joblib
-import numpy as np
 import pandas as pd
 from sklearn.base import clone
 
@@ -67,7 +66,7 @@ def main() -> None:
     parser.add_argument("--ensemble-seeds", default=None)
     parser.add_argument("--blend-oof", default=None,
                         help="classical model to blend with, e.g. pca_mlp")
-    parser.add_argument("--blend-weight", type=float, default=0.5,
+    parser.add_argument("--blend-weight", type=float, default=None,
                         help="weight of the token CNN in the blend")
     parser.add_argument("--n-jobs", type=int, default=23)
     parser.add_argument("--device", default="cuda")
@@ -132,10 +131,15 @@ def main() -> None:
         classes = model.classes_
     proba /= len(seeds)
 
-    if args.blend_oof:
-        classical = _classical_proba(cfg, classes, test.sample_ids, args.blend_oof)
-        w = args.blend_weight
-        print(f"blending with {args.blend_oof} at w_cnn={w:.2f}")
+    blend_name = args.blend_oof if args.blend_oof is not None else best.get("blend_oof")
+    if args.blend_weight is not None:
+        blend_weight = args.blend_weight
+    else:
+        blend_weight = best.get("blend_weight", 0.5)
+    if blend_name:
+        classical = _classical_proba(cfg, classes, test.sample_ids, blend_name)
+        w = float(blend_weight)
+        print(f"blending with {blend_name} at w_cnn={w:.2f}")
         proba = w * proba + (1.0 - w) * classical
 
     pred = classes[proba.argmax(axis=1)]
@@ -152,7 +156,7 @@ def main() -> None:
     joblib.dump(
         {"models": models, "seeds": seeds, "shot_bin": shot_bin,
          "norm_reference": norm_reference, "n_lines": lines,
-         "blend": args.blend_oof, "blend_weight": args.blend_weight},
+         "blend": blend_name, "blend_weight": blend_weight},
         cfg.models_dir / f"fitted_token_cnn_{stamp}.joblib",
     )
 

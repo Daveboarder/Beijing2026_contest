@@ -353,9 +353,30 @@ class TokenSet:
             self.line_element[keep], self.line_ion_state[keep], mean, std,
         )
 
+    def select_channels(self, keep: np.ndarray) -> TokenSet:
+        """Restrict to a subset of per-sample channels (amplitude-only ablation)."""
+        keep = np.asarray(keep)
+        mean = self.feature_mean[:, keep] if self.feature_mean is not None else None
+        std = self.feature_std[:, keep] if self.feature_std is not None else None
+        return TokenSet(
+            self.X[..., keep], self.y, self.sample_ids, self.split,
+            self.static, self.line_wavelength, self.line_element,
+            self.line_ion_state, mean, std,
+        )
+
     def as_flat(self) -> np.ndarray:
         """Flatten to ``(n_samples, n_rows * n_lines * N_SAMPLE)`` for sklearn APIs."""
         return self.X.reshape(self.X.shape[0], -1)
+
+    def as_image(self) -> np.ndarray:
+        """Broadcast static physics onto each sample: ``(n, 16, depth, lines)``."""
+        n, rows, lines, _ = self.X.shape
+        dynamic = np.transpose(self.X, (0, 3, 1, 2))
+        static = np.broadcast_to(
+            self.static.T[None, :, None, :],
+            (n, self.static.shape[1], rows, lines),
+        )
+        return np.concatenate([dynamic, static], axis=1).astype(np.float32, copy=False)
 
     @property
     def token_shape(self) -> tuple[int, int, int]:
@@ -410,8 +431,14 @@ def build_tokens(
             "shot_bin": shot_bin,
             "fit": asdict(fit_cfg),
             "dict": dictionary.config_hash,
+            # Resolvable pruning does not change the dictionary cache hash, so
+            # the surviving wavelengths are part of this key.
+            "n_lines": int(dictionary.n_lines),
+            "wl": hashlib.md5(
+                np.ascontiguousarray(dictionary.wavelength).tobytes()
+            ).hexdigest()[:8],
             "kind": "tokens",
-            "version": 1,
+            "version": 2,
         },
         sort_keys=True, default=str,
     )

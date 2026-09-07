@@ -259,6 +259,61 @@ uv run --extra cnn python scripts/09_benchmark_cnn.py --device cuda --tag cnn2d_
 uv run --extra cnn python scripts/10_predict_cnn.py --device cuda
 ```
 
+## Spectral-line tokens
+
+Instead of feeding 12282 wavelength bins (or a per-fold PCA of them) to the
+CNN, each spectrum is rewritten as a sequence of **physical transitions**. A
+theoretical line dictionary is ranked with a Saha-Boltzmann model over a
+Te × Ne grid, then a Voigt profile is fitted at every surviving line centre.
+The result is a `(16 channels × 50 depth rows × ~720 lines)` tensor: nine
+static quantum-mechanical channels (wavelength, Ei/Ek, log gi/gk/Ak,
+theoretical intensity, Z, ion stage) that are identical for every sample, plus
+seven per-spectrum channels (amplitude, FWHM, R², Δλ, RMSE, fit-valid,
+local continuum).
+
+These measurements were taken in air, so the air line database
+(`LIBS_data.db`) is required. The vacuum list is offset by ~0.07–0.12 nm —
+larger than a detector pixel — and measurably worse (12.1 % valid fits /
+0.119 nm median |Δλ| against 16.8 % / 0.047 nm for air under identical
+settings). Two further filters keep a token pinned to its own transition:
+
+* lines closer than two detector pixels are collapsed to the theoretically
+  strongest member of the blend (722 lines remain from 1005);
+* the fitted centroid may not walk more than 1.5 pixels from the theoretical
+  wavelength, otherwise the Voigt claims a neighbour.
+
+```bash
+uv run python scripts/12_build_tokens.py --n-jobs 23
+uv run --extra cnn python scripts/13_benchmark_token_cnn.py --device cuda
+uv run --extra cnn python scripts/14_predict_token_cnn.py --device cuda
+# or: make tokens && make token-cnn && make token-submit
+```
+
+`12_build_tokens.py` reports per-element line counts, the valid-fit fraction
+and a |Δλ| histogram (`results/figures/token_diagnostics.png`). On the
+training set 57 % of tokens converge, median |Δλ| is 0.056 nm, and H, N, O, Cr
+are detected in almost every spectrum.
+
+Grouped 5-fold, 5-seed ensemble (the same protocol as the pixel CNN):
+
+| Model | accuracy | notes |
+| --- | --- | --- |
+| Token CNN, 722 lines, shot-norm | **0.542** | 5 seeds × 2 repeats; seed mean 0.50 ± 0.03 |
+| Token CNN, 722 lines, bulk-norm | 0.525 | same protocol; shot-norm wins the sweep |
+| Token CNN, top-250 lines | 0.542 | 3-seed bulk ablation; matches shot-norm with fewer columns |
+| Amplitude-only tokens | 0.333 | Voigt extras and static channels do earn their place |
+| `pca_mlp` on token amplitudes | 0.421 ± 0.025 | 2-D structure of the token image matters |
+| Pixel CNN (wavelength PCA) | 0.575 | previous best neural model |
+| Classical `pca_mlp` | 0.715 ± 0.041 | still the leader |
+
+The token CNN does not beat the pixel CNN or the classical model on its own.
+A 50/50 probability blend with classical `pca_mlp` reaches **0.723 ± 0.033**,
+a small lift over classical alone (0.715). Mixing with the pixel CNN at
+weight 0.6 token / 0.4 pixel reaches 0.608, between the two neural models.
+
+`scripts/14_predict_token_cnn.py` loads `results/models/best_params_token_cnn.json`
+and, unless overridden, applies that 50/50 blend on the test set.
+
 ## Working with more rows per sample
 
 `--n-groups k` with `--augment surface` (default) splits the *surface half* of
