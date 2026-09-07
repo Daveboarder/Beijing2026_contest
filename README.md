@@ -218,18 +218,40 @@ uv run --extra cnn python scripts/09_benchmark_cnn.py
 # or: make cnn
 ```
 
+Torch is pinned to the **CUDA 12.6** wheels (`torch==…+cu126` via the
+`pytorch-cu126` index in `pyproject.toml`). That matches this host's NVIDIA
+userspace (driver API 12.7 / libcuda 565.x). The default PyPI wheel is built
+for CUDA 13.0 and refuses to initialise here.
+
+GPU use still requires the NVIDIA *kernel* module to be loaded
+(`nvidia-smi` must work). If `torch.cuda.is_available()` is `False` after
+`uv sync --extra cnn`, ask an admin to load the driver on `pclibs-gpu`; the
+Python side is already on a compatible build.
+
 Practical details for a 120-sample training set:
 
 * Wavelengths are binned (`--bin-factor 8`) and consecutive shots averaged
   (`--shot-bin 4`) → images of shape roughly `(50, 1533)`.
 * Inside each CV fold every shot is projected onto a shared spectral PCA basis
-  (`--spectral-pca 64`). Without that compression the CNN barely beats the
-  majority-class baseline; with it, the network can fit the training set and
-  generalise.
+  (`--spectral-pca 48`). Without that compression the CNN barely beats the
+  majority-class baseline.
 * Global average pooling is *not* used over the whole image — that would erase
   the depth axis. Wavelength is pooled away; a few depth bins are kept for the
   classifier head.
-* GPU is used automatically when available (this host falls back to CPU).
+* Single-seed CV is noisy (~0.43–0.52). Averaging out-of-fold probabilities
+  across 5 seeds recovers **~0.57** accuracy on CUDA
+  (`--ensemble-seeds 42,7,123,99,2026`). Wider nets, mixup, and SE/residual
+  extras consistently hurt with N=120.
+* Tune with `uv run --extra cnn python scripts/11_tune_cnn.py --device cuda`.
+  Write a submission with `scripts/10_predict_cnn.py` (loads
+  `results/models/best_params_cnn2d.json` when present).
+* Classical models (`pca_mlp` ~0.67) still lead alone; a 50/50 probability
+  blend of the CNN ensemble with classical `pca_mlp` reached **~0.69** CV.
+
+```bash
+uv run --extra cnn python scripts/09_benchmark_cnn.py --device cuda --tag cnn2d_cuda_opt
+uv run --extra cnn python scripts/10_predict_cnn.py --device cuda
+```
 
 ## Working with more rows per sample
 

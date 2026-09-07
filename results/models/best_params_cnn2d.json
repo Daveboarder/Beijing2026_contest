@@ -1,0 +1,40 @@
+{
+  "model": "cnn2d",
+  "cv_accuracy": 0.575,
+  "balanced_accuracy": 0.4778021978021978,
+  "macro_f1": 0.4839992388821413,
+  "seed_accuracies": [
+    0.475,
+    0.49166666666666664,
+    0.5,
+    0.525,
+    0.43333333333333335
+  ],
+  "classical_pca_mlp_oof": 0.675,
+  "blend_accuracy": 0.6916666666666667,
+  "blend_w_cnn": 0.5,
+  "stack_lr_accuracy": 0.6416666666666667,
+  "params": {
+    "bin_factor": 8,
+    "shot_bin": 4,
+    "norm_reference": "shot",
+    "spectral_pca": 48,
+    "channels": [
+      32,
+      64,
+      128
+    ],
+    "dropout": 0.35,
+    "epochs": 180,
+    "batch_size": 16,
+    "lr": 0.001,
+    "mixup_alpha": 0.0,
+    "ensemble_seeds": [
+      42,
+      7,
+      123,
+      99,
+      2026
+    ]
+  }
+}

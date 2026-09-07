@@ -1,0 +1,2 @@
+model,bin_factor,shot_bin,spectral_pca,accuracy,balanced_accuracy,macro_f1
+cnn2d_hybrid_ensemble,8,4,48,0.48333333333333334,0.44027472527472533,0.4264082669879771

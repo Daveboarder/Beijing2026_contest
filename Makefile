@@ -37,10 +37,13 @@ submission:
 		--params results/models/best_params_$(MODEL).json --n-jobs $(N_JOBS)
 
 cnn:
-	$(PY_CNN) scripts/09_benchmark_cnn.py --n-jobs $(N_JOBS)
+	$(PY_CNN) scripts/09_benchmark_cnn.py --device cuda --n-jobs $(N_JOBS)
+
+cnn-tune:
+	$(PY_CNN) scripts/11_tune_cnn.py --device cuda --n-jobs $(N_JOBS)
 
 cnn-submit:
-	$(PY_CNN) scripts/10_predict_cnn.py --n-jobs $(N_JOBS)
+	$(PY_CNN) scripts/10_predict_cnn.py --device cuda --n-jobs $(N_JOBS)
 
 lint:
 	uv run ruff check src scripts

@@ -65,11 +65,13 @@ cnn:
   shot_bin: 4
   # Per-fold spectral PCA width; 0 disables it (not recommended with N=120).
   spectral_pca: 48
-  epochs: 150
+  epochs: 180
   batch_size: 16
   lr: 0.001
-  dropout: 0.4
+  dropout: 0.35
+  # Compact net; single-seed CV is noisy (~0.43–0.52), 5-seed ensemble ~0.57.
   channels: [32, 64, 128]
+  ensemble_seeds: [42, 7, 123, 99, 2026]
 
 output:
   submission_name: predictions.csv

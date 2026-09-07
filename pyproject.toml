@@ -24,8 +24,10 @@ boosting = [
     "lightgbm>=4.0",
 ]
 # 2D CNN over (shots x wavelengths) "images".
+# Torch must match the host driver (CUDA 12.7 / driver 565): the default
+# PyPI wheel is cu130 and refuses to initialise. Pin to the cu126 index below.
 cnn = [
-    "torch>=2.2",
+    "torch>=2.2,<2.10",
 ]
 
 [dependency-groups]
@@ -47,6 +49,15 @@ packages = ["src/libs2026"]
 # server, so hardlinking is not available and would warn on every command.
 link-mode = "copy"
 
+# Host NVIDIA driver is 565.x (CUDA API 12.7). Use the CUDA 12.6 wheels so
+# torch.cuda.is_available() succeeds; the default index ships cu130.
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126", extra = "cnn" }
 [tool.ruff]
 line-length = 100
 src = ["src", "scripts"]

@@ -1,0 +1,2 @@
+model,bin_factor,shot_bin,spectral_pca,accuracy,accuracy_std,balanced_accuracy,macro_f1,kappa,fit_seconds
+cnn2d,8,4,48,0.4125,0.00416666666666668,0.3283791208791208,0.32795996759170204,0.20188679245283014,49.632076578000124

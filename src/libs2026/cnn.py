@@ -1,10 +1,8 @@
 """2-D CNN that treats each sample as a depth-spectrum image.
 
 Input layout is ``(batch, 1, n_shots, n_wavelengths)``: the shot axis is depth
-(aging goes surface → bulk from top to bottom) and the wavelength axis is the
-LIBS spectrum. With only 120 labelled samples the network has to stay small and
-heavily regularised; wavelength binning (see :mod:`.images`) keeps the width
-manageable.
+(aging goes surface → bulk) and the spectral axis is a per-fold PCA projection
+of the LIBS spectrum. Kept deliberately small — with 120 labels, capacity hurts.
 """
 
 from __future__ import annotations
@@ -19,7 +17,7 @@ try:
     import torch
     from torch import nn
     from torch.utils.data import DataLoader, TensorDataset
-except ImportError as exc:  # pragma: no cover - optional dependency
+except ImportError as exc:  # pragma: no cover
     torch = None
     nn = None
     _TORCH_IMPORT_ERROR = exc
@@ -37,15 +35,14 @@ def _require_torch() -> None:
 
 if torch is not None:
 
-    def _conv_block(in_ch: int, out_ch: int, k_depth: int = 3, k_wl: int = 9,
-                    pool: tuple[int, int] = (2, 4)) -> nn.Sequential:
-        """Anisotropic conv + GroupNorm (stable with tiny batches).
-
-        Pooling is stronger along wavelength than along depth so the aged-layer
-        structure (only a few shots thick) is not erased in the first layers.
-        """
+    def _conv_block(in_ch: int, out_ch: int, k_depth: int = 3, k_wl: int = 7,
+                    pool: tuple[int, int] = (2, 2)) -> nn.Sequential:
         return nn.Sequential(
             nn.Conv2d(in_ch, out_ch, kernel_size=(k_depth, k_wl),
+                      padding=(k_depth // 2, k_wl // 2), bias=False),
+            nn.GroupNorm(min(8, out_ch), out_ch),
+            nn.GELU(),
+            nn.Conv2d(out_ch, out_ch, kernel_size=(k_depth, k_wl),
                       padding=(k_depth // 2, k_wl // 2), bias=False),
             nn.GroupNorm(min(8, out_ch), out_ch),
             nn.GELU(),
@@ -53,25 +50,21 @@ if torch is not None:
         )
 
     class DepthSpectrumCNN(nn.Module):
-        """Compact 2-D CNN for (shots x wavelengths) LIBS images.
+        """Compact 2-D CNN for (shots × spectral-PCA) LIBS images.
 
-        Global average pooling over the *whole* image would erase the depth
-        axis (where the aged-layer dip lives). Wavelength is pooled away; a
-        few depth bins are kept so the head still sees surface vs bulk.
+        Wavelength is pooled away; ``depth_bins`` rows are kept so the
+        surface→bulk curve reaches the classifier (global pool erases aging).
         """
 
         def __init__(self, n_classes: int = 5, channels: tuple[int, ...] = (32, 64, 128),
-                     dropout: float = 0.3, depth_bins: int = 8):
+                     dropout: float = 0.4, depth_bins: int = 12):
             super().__init__()
-            pools = [(2, 2), (2, 2), (2, 2)]
             layers = []
             in_ch = 1
-            for i, out_ch in enumerate(channels):
-                pool = pools[min(i, len(pools) - 1)]
-                layers.append(_conv_block(in_ch, out_ch, pool=pool))
+            for out_ch in channels:
+                layers.append(_conv_block(in_ch, out_ch))
                 in_ch = out_ch
             self.backbone = nn.Sequential(*layers)
-            # Keep ``depth_bins`` rows, collapse wavelength to 1 column.
             self.pool = nn.AdaptiveAvgPool2d((depth_bins, 1))
             self.head = nn.Sequential(
                 nn.Flatten(),
@@ -81,6 +74,7 @@ if torch is not None:
                 nn.Dropout(dropout),
                 nn.Linear(channels[-1], n_classes),
             )
+            self.depth_bins = depth_bins
 
         def forward(self, x):
             return self.head(self.pool(self.backbone(x)))
@@ -88,8 +82,8 @@ if torch is not None:
 else:  # pragma: no cover
     DepthSpectrumCNN = None  # type: ignore[misc, assignment]
 
+
 def _to_images(X: np.ndarray, n_shots: int, n_wavelengths: int) -> np.ndarray:
-    """Accept flat ``(N, H*W)`` or already-shaped ``(N, H, W)`` / ``(N, 1, H, W)``."""
     X = np.asarray(X, dtype=np.float32)
     if X.ndim == 4:
         return X
@@ -106,32 +100,25 @@ def _to_images(X: np.ndarray, n_shots: int, n_wavelengths: int) -> np.ndarray:
 
 
 class SpectrumCNN(ClassifierMixin, BaseEstimator):
-    """Sklearn-compatible trainer around :class:`DepthSpectrumCNN`.
-
-    ``X`` may be the flattened image matrix from :meth:`ImageSet.as_flat` so the
-    estimator plugs into the existing grouped cross-validation helpers.
-
-    With only 120 labelled samples a raw ``(shots x 1000+)`` image is too wide
-    for a CNN to learn from. ``spectral_pca`` projects every shot onto a shared
-    spectral basis (fit inside each fold) so the network sees a compact
-    ``(shots x n_components)`` image where depth structure is preserved.
-    """
+    """Sklearn-compatible trainer around :class:`DepthSpectrumCNN`."""
 
     def __init__(
         self,
         n_shots: int = 50,
         n_wavelengths: int = 1535,
-        spectral_pca: int = 64,
+        spectral_pca: int = 48,
         channels: tuple[int, ...] = (32, 64, 128),
-        dropout: float = 0.3,
-        epochs: int = 120,
+        dropout: float = 0.4,
+        depth_bins: int = 12,
+        epochs: int = 150,
         batch_size: int = 16,
         lr: float = 1e-3,
         weight_decay: float = 1e-4,
-        patience: int = 30,
+        patience: int = 40,
         val_fraction: float = 0.0,
-        noise_std: float = 0.05,
-        wl_shift: int = 0,
+        noise_std: float = 0.03,
+        wl_shift: int = 2,
+        mixup_alpha: float = 0.0,
         label_smoothing: float = 0.05,
         log_intensity: bool = False,
         device: str | None = None,
@@ -143,6 +130,7 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
         self.spectral_pca = spectral_pca
         self.channels = channels
         self.dropout = dropout
+        self.depth_bins = depth_bins
         self.epochs = epochs
         self.batch_size = batch_size
         self.lr = lr
@@ -151,6 +139,7 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
         self.val_fraction = val_fraction
         self.noise_std = noise_std
         self.wl_shift = wl_shift
+        self.mixup_alpha = mixup_alpha
         self.label_smoothing = label_smoothing
         self.log_intensity = log_intensity
         self.device = device
@@ -164,7 +153,6 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def _augment(self, batch: torch.Tensor, rng: np.random.Generator) -> torch.Tensor:
-        """Cheap on-the-fly augmentations that respect the depth axis."""
         out = batch
         if self.noise_std > 0:
             out = out + self.noise_std * torch.randn_like(out)
@@ -177,9 +165,16 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
             out = torch.gather(out, -1, idx)
         return out
 
+    def _mixup(self, xb, yb, n_classes, rng):
+        if self.mixup_alpha <= 0 or xb.shape[0] < 2:
+            return xb, yb, False
+        lam = float(rng.beta(self.mixup_alpha, self.mixup_alpha))
+        perm = torch.randperm(xb.shape[0], device=xb.device)
+        y_a = torch.nn.functional.one_hot(yb, n_classes).float()
+        return lam * xb + (1.0 - lam) * xb[perm], lam * y_a + (1.0 - lam) * y_a[perm], True
+
     def _prepare_images(self, images: np.ndarray, fit_pca: bool,
                         train_idx: np.ndarray | None = None) -> np.ndarray:
-        """Optional log, spectral PCA, and standardisation → ``(N,1,H,W)``."""
         from sklearn.decomposition import PCA
 
         if self.log_intensity:
@@ -190,7 +185,6 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
             flat = images.reshape(-1, w)
             if fit_pca:
                 n_comp = min(self.spectral_pca, flat.shape[0] - 1, w)
-                # PCA is fit on training shots only when train_idx is given.
                 src = images[train_idx].reshape(-1, w) if train_idx is not None else flat
                 self.pca_ = PCA(n_components=n_comp, random_state=self.random_state).fit(src)
             images = self.pca_.transform(flat).reshape(n, h, -1).astype(np.float32)
@@ -200,91 +194,67 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
             self.mean_ = float(src.mean())
             self.std_ = float(src.std()) + 1e-6
             self.log_intensity_ = bool(self.log_intensity)
-            self.width_ = images.shape[-1]
+            self.width_ = int(images.shape[-1])
 
         return ((images - self.mean_) / self.std_)[:, None, :, :].astype(np.float32)
 
     def fit(self, X, y):
         _require_torch()
         device = self._resolve_device()
-        images = _to_images(X, self.n_shots, self.n_wavelengths)[:, 0]  # (N,H,W)
+        images = _to_images(X, self.n_shots, self.n_wavelengths)[:, 0]
         y = np.asarray(y)
         self.classes_, y_idx = np.unique(y, return_inverse=True)
         n_classes = len(self.classes_)
 
         rng = np.random.default_rng(self.random_state)
-        val_idx = np.array([], dtype=int)
         train_idx = np.arange(len(y_idx))
-        if self.val_fraction > 0 and len(y_idx) >= 20:
-            val_idx, train_idx = [], []
-            for c in range(n_classes):
-                members = np.flatnonzero(y_idx == c)
-                rng.shuffle(members)
-                n_val = max(1, int(round(len(members) * self.val_fraction)))
-                val_idx.extend(members[:n_val].tolist())
-                train_idx.extend(members[n_val:].tolist())
-            val_idx = np.asarray(val_idx, dtype=int)
-            train_idx = np.asarray(train_idx, dtype=int)
-
         prepared = self._prepare_images(images, fit_pca=True, train_idx=train_idx)
 
-        def pack(idxs):
-            return (
-                torch.from_numpy(prepared[idxs]),
-                torch.from_numpy(y_idx[idxs].astype(np.int64)),
-            )
-
-        x_train, y_train = pack(train_idx)
+        x_train = torch.from_numpy(prepared[train_idx])
+        y_train = torch.from_numpy(y_idx[train_idx].astype(np.int64))
         train_loader = DataLoader(
             TensorDataset(x_train, y_train),
             batch_size=min(self.batch_size, len(train_idx)),
             shuffle=True, drop_last=False,
+            pin_memory=device.type == "cuda",
         )
 
         counts = np.bincount(y_idx[train_idx], minlength=n_classes).astype(np.float64)
         weights = counts.sum() / np.maximum(counts, 1.0)
         weights = weights / weights.mean()
-        criterion = nn.CrossEntropyLoss(
-            weight=torch.tensor(weights, dtype=torch.float32, device=device),
-            label_smoothing=self.label_smoothing,
+        class_weight = torch.tensor(weights, dtype=torch.float32, device=device)
+        hard_criterion = nn.CrossEntropyLoss(
+            weight=class_weight, label_smoothing=self.label_smoothing,
         )
 
         net = DepthSpectrumCNN(
-            n_classes=n_classes, channels=tuple(self.channels), dropout=self.dropout,
+            n_classes=n_classes, channels=tuple(self.channels),
+            dropout=self.dropout, depth_bins=self.depth_bins,
         ).to(device)
         opt = torch.optim.AdamW(net.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(self.epochs, 1))
+        sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+            opt, T_max=max(self.epochs, 1), eta_min=self.lr * 0.05,
+        )
 
-        best_state, best_val, wait = None, -np.inf, 0
         for epoch in range(self.epochs):
             net.train()
             for xb, yb in train_loader:
-                xb = self._augment(xb, rng).to(device)
-                yb = yb.to(device)
+                xb = self._augment(xb.to(device, non_blocking=True), rng)
+                yb = yb.to(device, non_blocking=True)
+                xb_m, y_m, mixed = self._mixup(xb, yb, n_classes, rng)
                 opt.zero_grad(set_to_none=True)
-                loss = criterion(net(xb), yb)
+                logits = net(xb_m)
+                if mixed:
+                    log_probs = torch.log_softmax(logits, dim=1)
+                    loss = -(y_m * log_probs * class_weight.unsqueeze(0)).sum(dim=1).mean()
+                    loss = loss / class_weight.mean()
+                else:
+                    loss = hard_criterion(logits, yb)
                 loss.backward()
+                nn.utils.clip_grad_norm_(net.parameters(), 1.0)
                 opt.step()
             sched.step()
-
-            if len(val_idx):
-                net.eval()
-                with torch.no_grad():
-                    xv, yv = pack(val_idx)
-                    pred = net(xv.to(device)).argmax(dim=1).cpu().numpy()
-                    val_acc = float((pred == y_idx[val_idx]).mean())
-                if val_acc > best_val + 1e-4:
-                    best_val, wait = val_acc, 0
-                    best_state = {k: v.detach().cpu().clone() for k, v in net.state_dict().items()}
-                else:
-                    wait += 1
-                    if wait >= self.patience:
-                        if self.verbose:
-                            print(f"early stop at epoch {epoch + 1}, val_acc={best_val:.3f}")
-                        break
-                if self.verbose and (epoch + 1) % 10 == 0:
-                    print(f"epoch {epoch + 1:3d}  val_acc={val_acc:.3f}")
-            elif self.verbose and (epoch + 1) % 20 == 0:
+            if self.verbose and (epoch + 1) % 50 == 0:
                 net.eval()
                 with torch.no_grad():
                     pred = net(x_train.to(device)).argmax(dim=1).cpu().numpy()
@@ -292,12 +262,7 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
                     f"epoch {epoch + 1:3d}  "
                     f"train_acc={float((pred == y_idx[train_idx]).mean()):.3f}"
                 )
-                best_state = {k: v.detach().cpu().clone() for k, v in net.state_dict().items()}
-            else:
-                best_state = {k: v.detach().cpu().clone() for k, v in net.state_dict().items()}
 
-        if best_state is not None:
-            net.load_state_dict(best_state)
         net.eval()
         self.net_ = net.to("cpu")
         self.n_features_in_ = self.n_shots * self.n_wavelengths
@@ -309,10 +274,11 @@ class SpectrumCNN(ClassifierMixin, BaseEstimator):
         _require_torch()
         images = _to_images(X, self.n_shots, self.n_wavelengths)[:, 0]
         prepared = self._prepare_images(images, fit_pca=False)
-        self.net_.eval()
+        device = self._resolve_device()
+        self.net_.to(device).eval()
         with torch.no_grad():
-            logits = self.net_(torch.from_numpy(prepared))
-        return logits.numpy()
+            logits = self.net_(torch.from_numpy(prepared).to(device))
+        return logits.cpu().numpy()
 
     def predict_proba(self, X):
         logits = self._logits(X)

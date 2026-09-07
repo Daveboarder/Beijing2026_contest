@@ -1,0 +1,2 @@
+model,accuracy,balanced_accuracy,macro_f1,classical_pca_mlp,blend_acc,blend_w_cnn,stack_lr_acc,seed_mean,seed_std
+cnn2d_5seed,0.575,0.4778021978021978,0.4839992388821413,0.675,0.6916666666666667,0.5,0.6416666666666667,0.485,0.030459444804161778
