@@ -271,8 +271,10 @@ class LineDictionary:
         """Keep the ``n`` strongest lines, still ordered by wavelength."""
         if n >= self.n_lines:
             return self
-        keep = np.argsort(self.theoretical_intensity)[::-1][:n]
-        keep = np.sort(keep)
+        return self._take(np.argsort(self.theoretical_intensity)[::-1][:n])
+
+    def _take(self, keep: np.ndarray) -> LineDictionary:
+        keep = np.sort(np.asarray(keep, dtype=int))
         return LineDictionary(
             wavelength=self.wavelength[keep],
             element=self.element[keep],
@@ -282,6 +284,50 @@ class LineDictionary:
             db_path=self.db_path,
             config_hash=self.config_hash,
         )
+
+    def resolvable(
+        self,
+        wavelength_axis: np.ndarray,
+        channel_bounds: tuple[int, ...],
+        n_pixels: float = 2.0,
+    ) -> LineDictionary:
+        """Drop lines this spectrometer cannot separate from a stronger neighbour.
+
+        The line list is far finer than the instrument: median spacing is about
+        0.10 nm against a 0.08-0.18 nm resolution limit, so most theoretical
+        lines arrive blended into a single observed peak. Fitting each one
+        separately does not recover them, it just hands the same peak to several
+        tokens under different labels, which makes the static physics channels
+        describe the wrong transition.
+
+        Within each blended group only the theoretically strongest line is kept,
+        since that is the one dominating the peak the fit will actually find.
+        """
+        order = np.argsort(self.wavelength)
+        wl = self.wavelength[order]
+        intensity = self.theoretical_intensity[order]
+
+        # Local dispersion per channel; a line counts as resolvable if any
+        # channel covering it samples finely enough.
+        steps = []
+        for a, b in zip(channel_bounds[:-1], channel_bounds[1:]):
+            seg = wavelength_axis[a:b]
+            steps.append((seg.min(), seg.max(), float(np.median(np.diff(seg)))))
+
+        def limit(value: float) -> float:
+            covering = [s for lo, hi, s in steps if lo <= value <= hi]
+            return n_pixels * (min(covering) if covering else max(s for _, _, s in steps))
+
+        keep_sorted: list[int] = []
+        group: list[int] = [0]
+        for i in range(1, len(wl)):
+            if wl[i] - wl[group[-1]] < limit(float(wl[i])):
+                group.append(i)
+            else:
+                keep_sorted.append(max(group, key=lambda j: intensity[j]))
+                group = [i]
+        keep_sorted.append(max(group, key=lambda j: intensity[j]))
+        return self._take(order[np.array(keep_sorted, dtype=int)])
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

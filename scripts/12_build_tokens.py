@@ -59,7 +59,7 @@ def _fit_against(cfg, dictionary, spectra, fit_cfg):
     features = fit_spectra(
         spectra, wavelength, resolved, dictionary.wavelength[keep],
         fit_cfg.gamma_init, fit_cfg.sigma_init, fit_cfg.r2_min,
-        fit_cfg.min_snr, fit_cfg.maxfev,
+        fit_cfg.min_snr, fit_cfg.maxfev, fit_cfg.max_shift_pixels,
     )
     return features, keep
 

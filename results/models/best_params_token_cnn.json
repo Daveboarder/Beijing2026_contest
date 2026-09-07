@@ -1,0 +1,36 @@
+{
+  "model": "token_cnn",
+  "cv_accuracy": 0.525,
+  "balanced_accuracy": 0.45489010989010986,
+  "macro_f1": 0.4530928771203371,
+  "seed_accuracies": [
+    0.4166666666666667,
+    0.5083333333333333,
+    0.4583333333333333,
+    0.38333333333333336,
+    0.4666666666666667
+  ],
+  "params": {
+    "norm_reference": "bulk",
+    "shot_bin": 4,
+    "n_lines": 722,
+    "channels": [
+      32,
+      64,
+      128
+    ],
+    "dropout": 0.4,
+    "token_dropout": 0.1,
+    "noise_std": 0.05,
+    "epochs": 150,
+    "batch_size": 16,
+    "lr": 0.001,
+    "ensemble_seeds": [
+      42,
+      7,
+      123,
+      99,
+      2026
+    ]
+  }
+}

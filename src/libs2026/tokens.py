@@ -129,6 +129,7 @@ def fit_line(
     out: np.ndarray,
     min_snr: float = 3.0,
     maxfev: int = 600,
+    max_shift_pixels: float = 1.5,
 ) -> None:
     """Fit one Voigt profile into ``out`` (length ``N_SAMPLE``)."""
     out[:] = 0.0
@@ -154,14 +155,25 @@ def fit_line(
     if noise > 0 and y_max < min_snr * noise:
         return
 
-    lb = [float(x[0]), 0.0, 1e-4, 1e-4]
-    ub = [float(x[-1]), y_max * 100.0, 0.5, 0.05]
+    # Pin the centroid near the theoretical wavelength so the fit cannot claim
+    # a neighbouring transition as this token's line.
+    step = float(np.median(np.abs(np.diff(x)))) if x.size > 1 else 0.0
+    shift = max_shift_pixels * step if step > 0 else float(x[-1] - x[0])
+    lo_x = max(float(x[0]), centre_nm - shift)
+    hi_x = min(float(x[-1]), centre_nm + shift)
+    if not hi_x > lo_x:
+        lo_x, hi_x = float(x[0]), float(x[-1])
+
+    x0_init = float(x[int(np.argmax(y))])
+    x0_init = min(max(x0_init, lo_x), hi_x)
+    lb = [lo_x, 0.0, 1e-4, 1e-4]
+    ub = [hi_x, y_max * 100.0, 0.5, 0.05]
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", OptimizeWarning)
             popt, _ = curve_fit(
                 voigt, x, y,
-                p0=[float(x[int(np.argmax(y))]), y_max, gamma_init, sigma_init],
+                p0=[x0_init, y_max, gamma_init, sigma_init],
                 bounds=(lb, ub),
                 maxfev=maxfev, ftol=1e-6, xtol=1e-6,
             )
@@ -201,6 +213,7 @@ def fit_spectra(
     r2_min: float,
     min_snr: float = 3.0,
     maxfev: int = 600,
+    max_shift_pixels: float = 1.5,
 ) -> np.ndarray:
     """Fit every line in every row; returns ``(n_rows, n_lines, N_SAMPLE)``."""
     n_rows, n_lines = spectra.shape[0], len(bounds)
@@ -210,7 +223,8 @@ def fit_spectra(
         spec = spectra[r]
         for j, (lo, hi) in enumerate(bounds):
             fit_line(spec, wavelength, lo, hi, float(centres[j]),
-                     gamma_init, sigma_init, r2_min, scratch, min_snr, maxfev)
+                     gamma_init, sigma_init, r2_min, scratch, min_snr, maxfev,
+                     max_shift_pixels)
             out[r, j] = scratch
     return out
 
@@ -238,6 +252,13 @@ class FitConfig:
     # physically honest answer and the bulk of the speed-up.
     min_snr: float = 3.0
     maxfev: int = 600
+    # How far the fitted centroid may drift from the theoretical wavelength,
+    # in detector pixels. The window has to stay wide enough to constrain four
+    # Voigt parameters, but an unconstrained centroid then walks to whichever
+    # neighbouring line is strongest: 23% of fits were landing at the window
+    # edge. Bounding the centroid keeps the token pinned to its own transition
+    # while leaving the window wide enough to fit.
+    max_shift_pixels: float = 1.5
 
 
 def fit_config_from_config(cfg: Config) -> FitConfig:
@@ -261,7 +282,7 @@ def line_dictionary_from_config(cfg: Config, verbose: bool = True) -> LineDictio
             f"Line database not found at {db_path}. Set tokens.db_path in the config."
         )
     wavelength = load_wavelength(cfg)
-    return build_line_dictionary(
+    dictionary = build_line_dictionary(
         db_path,
         elements=tuple(tok.get("elements", STEEL_ELEMENTS)),
         wl_min=float(wavelength.min()),
@@ -277,6 +298,15 @@ def line_dictionary_from_config(cfg: Config, verbose: bool = True) -> LineDictio
         cache_dir=cfg.cache_dir,
         verbose=verbose,
     )
+    n_pixels = float(tok.get("min_separation_pixels", 0.0))
+    if n_pixels > 0:
+        before = dictionary.n_lines
+        bounds = tuple(cfg["data"].get("channel_bounds", DEFAULT_CHANNEL_BOUNDS))
+        dictionary = dictionary.resolvable(wavelength, bounds, n_pixels)
+        if verbose:
+            print(f"resolvable lines: {dictionary.n_lines} / {before} "
+                  f"(>= {n_pixels:g} pixels apart)")
+    return dictionary
 
 
 class TokenSet:
@@ -354,7 +384,7 @@ def _tokenize_sample(cfg: Config, sample_id: str, pre: Preprocessor, shot_bin: i
     return fit_spectra(
         np.asarray(shots, dtype=np.float32), wavelength, bounds, centres,
         fit_cfg.gamma_init, fit_cfg.sigma_init, fit_cfg.r2_min,
-        fit_cfg.min_snr, fit_cfg.maxfev,
+        fit_cfg.min_snr, fit_cfg.maxfev, fit_cfg.max_shift_pixels,
     )
 
 

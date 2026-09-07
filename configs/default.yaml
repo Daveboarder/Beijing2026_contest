@@ -93,6 +93,12 @@ tokens:
   # Keep the strongest 10% of each element's lines (all of them below min_keep).
   percent: 10.0
   min_keep: 10
+  # Drop lines closer together than this many detector pixels. The raw list is
+  # finer than the spectrometer (median spacing 0.10 nm against a 0.08-0.18 nm
+  # resolution limit), so without this 65% of tokens share their peak with a
+  # neighbour and the static physics channels end up describing the wrong
+  # transition. Set to 0 to keep every line.
+  min_separation_pixels: 2.0
   # Consecutive shots averaged before fitting; 4 gives 50 depth rows.
   shot_bin: 4
   fit:
