@@ -73,5 +73,38 @@ cnn:
   channels: [32, 64, 128]
   ensemble_seeds: [42, 7, 123, 99, 2026]
 
+# Spectral-line tokenization: each spectrum becomes a sequence of physical
+# transitions instead of 12282 wavelength bins (see src/libs2026/tokens.py).
+tokens:
+  # Line database from the LIBS foundation-model project. These measurements
+  # were taken in air, so the air database is required: the vacuum variant is
+  # offset by ~0.07-0.12 nm, which is larger than the pixel step and measurably
+  # degrades the fits (12.1% valid / 0.119 nm median offset, against
+  # 16.8% / 0.047 nm for air under identical settings).
+  db_path: /mnt/data/projects/Running_projects/26_0153_Foundation_model/Methods/LIBS_foundation/external_data/Source/LIBS_data.db
+  # Steel matrix plus the ambient species always present in a LIBS plasma.
+  elements: [Fe, Cr, Ni, Mn, Si, Mo, V, Cu, Ti, Al, C, H, O, N]
+  # Saha-Boltzmann grid used to rank lines by theoretical intensity.
+  te_range: [6500.0, 11000.0]
+  # The +  is required: YAML reads 1.0e17 as a string, 1.0e+17 as a float.
+  ne_range: [1.0e+17, 5.0e+17]
+  n_te: 10
+  n_ne: 10
+  # Keep the strongest 10% of each element's lines (all of them below min_keep).
+  percent: 10.0
+  min_keep: 10
+  # Consecutive shots averaged before fitting; 4 gives 50 depth rows.
+  shot_bin: 4
+  fit:
+    window_nm: 0.3
+    gamma_init: 0.1
+    sigma_init: 0.006
+    # Keep every converged fit and let the r2 channel carry the confidence.
+    # The upstream 0.85 gate zeroes ~80% of tokens (20% valid vs 74% at 0.0).
+    r2_min: 0.0
+    # Skip lines buried in noise: absent transitions carry no information.
+    min_snr: 3.0
+    maxfev: 600
+
 output:
   submission_name: predictions.csv

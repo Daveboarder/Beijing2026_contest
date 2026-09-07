@@ -48,7 +48,9 @@ src/libs2026/             the library
   features.py             sample-level feature matrices (+ caching)
   models.py               the classifier zoo, incl. a PLS-DA implementation
   images.py               (shots x wavelengths) image tensors for the CNN
-  cnn.py                  2-D CNN over depth-spectrum images (needs torch)
+  lines_db.py             theoretical line dictionary (Saha-Boltzmann)
+  tokens.py               Voigt fits per line -> spectral-line tokens
+  cnn.py                  2-D CNNs over depth-spectrum images and tokens (torch)
   evaluation.py           grouped stratified CV, sample-level scoring
   plotting.py             figures
 scripts/                  numbered pipeline stages, run in order
@@ -145,6 +147,10 @@ Consequences for the pipeline:
 | `08_depth_analysis.py` | Depth profiles of diagnostic lines by aging level. |
 | `09_benchmark_cnn.py` | 2-D CNN on `(shots × wavelengths)` images (needs `--extra cnn`). |
 | `10_predict_cnn.py` | Fit the CNN and write a contest submission. |
+| `11_tune_cnn.py` | GPU hyperparameter sweep for the pixel CNN. |
+| `12_build_tokens.py` | Voigt-fits every spectral line into a token cache, with fit diagnostics. |
+| `13_benchmark_token_cnn.py` | 2-D CNN over spectral-line tokens. |
+| `14_predict_token_cnn.py` | Fit the token CNN (optionally blended) and write a submission. |
 
 ## Methods being compared
 

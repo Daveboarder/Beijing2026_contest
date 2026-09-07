@@ -13,38 +13,49 @@ from .depth import (
 from .evaluation import CVResult, cross_validate_model, predict_scores, summarize
 from .features import FeatureSet, aggregate_predictions, build_features
 from .images import ImageSet, build_images
+from .lines_db import STEEL_ELEMENTS, LineDictionary, build_line_dictionary
 from .models import PLSDA, BinnedPCA, build_depth_zoo, build_model_zoo, get_model
 from .preprocessing import Preprocessor
+from .tokens import FitConfig, TokenSet, build_tokens, line_dictionary_from_config
 
 try:
-    from .cnn import DepthSpectrumCNN, SpectrumCNN
+    from .cnn import DepthSpectrumCNN, SpectrumCNN, TokenCNN
 except ImportError:  # torch is an optional extra
     DepthSpectrumCNN = None  # type: ignore[misc, assignment]
     SpectrumCNN = None  # type: ignore[misc, assignment]
+    TokenCNN = None  # type: ignore[misc, assignment]
 
 __all__ = [
     "AUGMENTATIONS",
     "DIAGNOSTIC_LINES_NM",
     "ENCODINGS",
     "PROJECT_ROOT",
+    "STEEL_ELEMENTS",
     "BinnedPCA",
     "Config",
     "DepthSpectrumCNN",
+    "FitConfig",
     "ImageSet",
+    "LineDictionary",
     "Preprocessor",
     "FeatureSet",
     "PLSDA",
     "SpectrumCNN",
+    "TokenCNN",
+    "TokenSet",
     "CVResult",
     "build_cache",
     "build_depth_zoo",
     "build_features",
     "build_images",
+    "build_line_dictionary",
     "build_model_zoo",
+    "build_tokens",
     "aggregate_predictions",
     "cross_validate_model",
     "encode_sample",
     "get_model",
+    "line_dictionary_from_config",
     "line_indices",
     "load_index",
     "log_bin_edges",
