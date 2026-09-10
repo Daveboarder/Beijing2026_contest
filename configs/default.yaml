@@ -117,3 +117,18 @@ tokens:
 
 output:
   submission_name: predictions.csv
+
+# Shared wavelength CNN -> depth encoder -> end-to-end five-class MLP.
+# This experiment has its own preprocessing: repaired, shot-L2 spectra plus
+# log1p channel intensity relative to the trailing bulk shots; no baseline removal.
+depth_transformer:
+  bin_factor: 4
+  surface_shots: 20
+  late_bin: 4
+  bulk_start: 140
+  epochs: 100
+  patience: 15
+  batch_size: 8
+  lr: 0.0003
+  dropout: 0.2
+  seeds: [42, 7, 123]

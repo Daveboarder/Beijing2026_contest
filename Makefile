@@ -57,5 +57,12 @@ token-submit:
 lint:
 	uv run ruff check src scripts
 
+.PHONY: depth-transformer test-depth-transformer
+depth-transformer:
+	$(PY_CNN) scripts/15_depth_transformer.py benchmark --device cuda --tag initial
+
+test-depth-transformer:
+	$(PY_CNN) -m unittest discover -s tests -v
+
 clean-cache:
 	rm -rf cache/features cache/images cache/tokens cache/lines

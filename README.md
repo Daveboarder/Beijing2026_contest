@@ -343,3 +343,19 @@ configuration being shipped, then checks the CSV against the organisers' rules
 
 Send the final file to `libs2026@hjsmeeting.cn` before **31 October 2026**; one
 submission per team.
+
+## Spectral CNN and depth transformer
+
+The new experiment learns an embedding for each spectrum with shared 1-D CNNs,
+models the depth sequence with a compact transformer, and classifies samples
+with an end-to-end MLP. It includes pooling-only and depth-CNN controls on
+identical grouped folds, inner-validation early stopping, and saved recipes
+for consistent final refitting. See [architecture, commands, and validation
+details](docs/depth_transformer.md).
+
+```bash
+uv run --extra cnn python scripts/15_depth_transformer.py benchmark --device cuda --tag initial
+```
+
+Synthetic tests verify the implementation; contest accuracy must be measured
+on the training host with the actual spectral data.
