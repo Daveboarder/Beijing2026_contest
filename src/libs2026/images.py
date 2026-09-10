@@ -57,8 +57,12 @@ class ImageSet:
 
 
 def _one_image(cfg: Config, sample_id: str, pre: Preprocessor,
-               bin_factor: int, shot_bin: int, bounds) -> np.ndarray:
-    shots = pre(load_shots(cfg, sample_id, mmap=False))
+               bin_factor: int, shot_bin: int, bounds,
+               n_shots: int | None = None) -> np.ndarray:
+    shots = load_shots(cfg, sample_id, mmap=False)
+    if n_shots is not None:
+        shots = shots[: int(n_shots)]
+    shots = pre(shots)
     if bin_factor > 1:
         shots = bin_spectrum(shots, bin_factor, bounds)
     if shot_bin > 1:
@@ -72,6 +76,7 @@ def build_images(
     pre: Preprocessor | None = None,
     bin_factor: int = 8,
     shot_bin: int = 1,
+    n_shots: int | None = None,
     n_jobs: int = 8,
     use_cache: bool = True,
 ) -> ImageSet:
@@ -81,12 +86,16 @@ def build_images(
     consecutive shots can be averaged by ``shot_bin`` so the image stays
     tractable. Neighbouring spectrometer pixels and successive shots are highly
     correlated, so this is mostly denoising, not information loss.
+    ``n_shots`` keeps only the first N pulses (the aged surface); ``None``
+    uses the full recorded sequence.
     """
     pre = pre or Preprocessor.from_config(cfg)
     bounds = tuple(cfg["data"].get("channel_bounds", (0, 4094, 8188, 12282)))
+    n_shots = int(n_shots) if n_shots else None
 
     key = json.dumps(
-        {"pre": asdict(pre), "bin": bin_factor, "shot_bin": shot_bin, "kind": "image"},
+        {"pre": asdict(pre), "bin": bin_factor, "shot_bin": shot_bin,
+         "n_shots": n_shots, "kind": "image"},
         sort_keys=True, default=str,
     )
     digest = hashlib.md5(key.encode()).hexdigest()[:12]
@@ -104,7 +113,7 @@ def build_images(
 
     index = load_index(cfg)
     arrays = Parallel(n_jobs=n_jobs, verbose=5)(
-        delayed(_one_image)(cfg, sid, pre, bin_factor, shot_bin, bounds)
+        delayed(_one_image)(cfg, sid, pre, bin_factor, shot_bin, bounds, n_shots)
         for sid in index["sample_id"]
     )
     X = np.stack(arrays, axis=0)

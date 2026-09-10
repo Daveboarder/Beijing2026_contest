@@ -76,6 +76,9 @@ def main() -> None:
                         help="average neighbouring wavelength pixels (default 8)")
     parser.add_argument("--shot-bin", type=int, default=4,
                         help="average consecutive shots (default 4 → 50-row images)")
+    parser.add_argument("--n-shots", type=int, default=None,
+                        help="keep only the first N pulses (surface layer); "
+                             "default = all recorded shots")
     parser.add_argument("--epochs", type=int, default=180)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -104,7 +107,8 @@ def main() -> None:
     pre = replace(base, normalization_reference=args.norm_reference)
 
     images = build_images(cfg, pre, bin_factor=args.bin_factor,
-                          shot_bin=args.shot_bin, n_jobs=args.n_jobs)
+                          shot_bin=args.shot_bin, n_shots=args.n_shots,
+                          n_jobs=args.n_jobs)
     train = images.subset("train")
     n_shots, n_wl = train.image_shape
     y = train.y.astype(int)
@@ -152,22 +156,35 @@ def main() -> None:
             cfg.figures_dir / f"confusion_{tag}_cnn2d.png",
             title=f"cnn2d ensemble: out-of-fold confusion ({tag})",
         )
-        with open(cfg.models_dir / "best_params_cnn2d.json", "w", encoding="utf-8") as fh:
-            json.dump({
-                "model": "cnn2d",
-                "cv_accuracy": ens["accuracy"],
-                "balanced_accuracy": ens["balanced_accuracy"],
-                "macro_f1": ens["macro_f1"],
-                "seed_accuracies": ens["seed_accuracies"],
-                "params": {
-                    "bin_factor": args.bin_factor, "shot_bin": args.shot_bin,
-                    "norm_reference": args.norm_reference,
-                    "spectral_pca": args.spectral_pca, "channels": list(channels),
-                    "dropout": args.dropout, "epochs": args.epochs,
-                    "batch_size": args.batch_size, "lr": args.lr,
-                    "ensemble_seeds": seeds,
-                },
-            }, fh, indent=2)
+        payload = {
+            "model": "cnn2d",
+            "cv_accuracy": ens["accuracy"],
+            "balanced_accuracy": ens["balanced_accuracy"],
+            "macro_f1": ens["macro_f1"],
+            "seed_accuracies": ens["seed_accuracies"],
+            "params": {
+                "bin_factor": args.bin_factor, "shot_bin": args.shot_bin,
+                "n_shots": args.n_shots,
+                "norm_reference": args.norm_reference,
+                "spectral_pca": args.spectral_pca, "channels": list(channels),
+                "dropout": args.dropout, "epochs": args.epochs,
+                "batch_size": args.batch_size, "lr": args.lr,
+                "ensemble_seeds": seeds,
+            },
+        }
+        with open(cfg.models_dir / f"best_params_{tag}.json", "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
+        official = cfg.models_dir / "best_params_cnn2d.json"
+        previous = {}
+        if official.exists():
+            with open(official, encoding="utf-8") as fh:
+                previous = json.load(fh)
+        if previous.get("cv_accuracy", -1) > payload["cv_accuracy"]:
+            print(f"keeping existing {official} "
+                  f"(acc {previous['cv_accuracy']:.3f} > {payload['cv_accuracy']:.3f})")
+        else:
+            with open(official, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, indent=2)
     else:
         model = SpectrumCNN(**model_kw, random_state=cv_cfg["random_state"])
         result = cross_validate_model(
@@ -197,6 +214,7 @@ def main() -> None:
             "cv": {**cv_cfg, "n_repeats": n_repeats},
             "bin_factor": args.bin_factor,
             "shot_bin": args.shot_bin,
+            "n_shots": args.n_shots,
             "image_shape": [n_shots, n_wl],
             "channels": list(channels),
             "epochs": args.epochs,

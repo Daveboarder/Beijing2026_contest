@@ -39,12 +39,14 @@ from libs2026.tokens import (
     F_MAX_INT,
     F_VALID,
     build_tokens,
+    channel_head_kwargs,
     fit_config_from_config,
     line_dictionary_from_config,
+    parse_sample_channels,
 )
 
 PIXEL_CNN_ACC = 0.575
-CLASSICAL_ACC = 0.675
+CLASSICAL_ACC = 0.715
 
 
 def ensemble_oof(tokens, model_kw, seeds, n_splits=5, n_repeats=2, verbose=True):
@@ -86,23 +88,29 @@ def ensemble_oof(tokens, model_kw, seeds, n_splits=5, n_repeats=2, verbose=True)
     }
 
 
-def model_kwargs(tokens, args):
+def model_kwargs(tokens, args, extra=None):
     rows, lines, feats = tokens.token_shape
-    return dict(
+    depth_bins = min(12, max(4, rows // 3)) if rows <= 32 else 12
+    kw = dict(
         static=tokens.static,
         feature_mean=tokens.feature_mean,
         feature_std=tokens.feature_std,
         n_rows=rows, n_lines=lines, n_features=feats,
         channels=tuple(int(c) for c in args.channels.split(",") if c.strip()),
         dropout=args.dropout,
+        depth_bins=depth_bins,
         epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,
         token_dropout=args.token_dropout,
         noise_std=args.noise_std,
+        include_static=not args.no_static,
         device=args.device,
         verbose=0,
     )
+    if extra:
+        kw.update(extra)
+    return kw
 
 
 def _repeat_probas(frame: pd.DataFrame, sample_ids, classes) -> list[np.ndarray] | None:
@@ -188,6 +196,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default=None)
     parser.add_argument("--shot-bin", type=int, default=None)
+    parser.add_argument("--n-shots", type=int, default=None,
+                        help="keep only the first N pulses (surface layer); "
+                             "default from config, 0 = all shots")
     parser.add_argument("--norm-reference", default="shot", choices=["shot", "bulk", "both"],
                         help="'shot' won the token-CNN sweep; 'bulk' keeps the depth "
                              "intensity profile; 'both' compares the two")
@@ -203,6 +214,12 @@ def main() -> None:
     parser.add_argument("--n-repeats", type=int, default=2)
     parser.add_argument("--ablation", action="store_true",
                         help="also score a reduced line set and amplitude-only tokens")
+    parser.add_argument("--sample-channels", default=None,
+                        help="comma-separated per-sample token channels to keep "
+                             "(e.g. r2,delta_lambda). Default: all seven.")
+    parser.add_argument("--no-static", action="store_true",
+                        help="drop the 9 dictionary physics channels; use only "
+                             "the selected per-sample token channels")
     parser.add_argument("--classical-oof", default="results/predictions/oof_g4_b1_pca_mlp.csv",
                         help="classical pca_mlp OOF file to blend against")
     parser.add_argument("--pixel-oof", default="results/predictions/oof_cnn2d_pca48_cnn2d.csv",
@@ -216,6 +233,8 @@ def main() -> None:
     cfg.ensure_dirs()
     tok_cfg = cfg.get("tokens", {})
     shot_bin = args.shot_bin if args.shot_bin is not None else int(tok_cfg.get("shot_bin", 4))
+    n_shots = args.n_shots if args.n_shots is not None else tok_cfg.get("n_shots")
+    n_shots = int(n_shots) if n_shots else None
     seeds = [int(s) for s in args.ensemble_seeds.split(",") if s.strip()]
     fit_cfg = fit_config_from_config(cfg)
     dictionary = line_dictionary_from_config(cfg, verbose=False)
@@ -226,12 +245,20 @@ def main() -> None:
     for reference in references:
         pre = replace(Preprocessor.from_config(cfg), normalization_reference=reference)
         tokens = build_tokens(cfg, dictionary, pre=pre, shot_bin=shot_bin,
-                              fit_cfg=fit_cfg, n_jobs=args.n_jobs, verbose=True)
+                              n_shots=n_shots, fit_cfg=fit_cfg,
+                              n_jobs=args.n_jobs, verbose=True)
         train = tokens.subset("train")
+        extra_kw = {}
+        if args.sample_channels:
+            keep = parse_sample_channels(args.sample_channels)
+            train = train.select_channels(keep)
+            extra_kw = channel_head_kwargs(keep)
+            print(f"  sample channels: {args.sample_channels} -> indices {keep.tolist()}  "
+                  f"static={'off' if args.no_static else 'on'}")
         print(f"\nnormalisation reference '{reference}': {train}  "
               f"fit_valid={train.valid_fraction():.1%}")
         result = ensemble_oof(
-            train, model_kwargs(train, args), seeds,
+            train, model_kwargs(train, args, extra_kw), seeds,
             n_splits=args.n_splits, n_repeats=args.n_repeats,
         )
         print(f"  token_cnn ({reference})  acc={result['accuracy']:.3f}  "
@@ -241,7 +268,12 @@ def main() -> None:
         rows.append({
             "model": f"token_cnn_{reference}",
             "norm_reference": reference,
+            "n_shots": n_shots or int(cfg["data"].get("n_shots", 200)),
+            "n_rows": train.token_shape[0],
             "n_lines": train.n_lines,
+            "n_features": train.token_shape[2],
+            "include_static": not args.no_static,
+            "sample_channels": args.sample_channels or "all",
             "accuracy": result["accuracy"],
             "balanced_accuracy": result["balanced_accuracy"],
             "macro_f1": result["macro_f1"],
@@ -254,6 +286,10 @@ def main() -> None:
     best_train, best = results[best_ref]
     y = best_train.y.astype(int)
     classes = best["classes"]
+
+    if args.ablation and args.sample_channels:
+        print("ablation skip: sample-channels already restricts the token tensor")
+        args.ablation = False
 
     if args.ablation:
         print(f"\nablations on '{best_ref}'")
@@ -374,7 +410,12 @@ def main() -> None:
         "params": {
             "norm_reference": best_ref,
             "shot_bin": shot_bin,
+            "n_shots": n_shots,
+            "n_rows": best_train.token_shape[0],
             "n_lines": best_train.n_lines,
+            "n_features": best_train.token_shape[2],
+            "sample_channels": args.sample_channels,
+            "include_static": not args.no_static,
             "channels": [int(c) for c in args.channels.split(",") if c.strip()],
             "dropout": args.dropout,
             "token_dropout": args.token_dropout,
@@ -394,17 +435,22 @@ def main() -> None:
             "blend_weight": None if blend_best is None else blend_best["w_a"],
         },
     }
-    params_path = cfg.models_dir / "best_params_token_cnn.json"
+    tagged_path = cfg.models_dir / f"best_params_{args.tag}.json"
+    official_path = cfg.models_dir / "best_params_token_cnn.json"
     previous = {}
-    if params_path.exists():
-        with open(params_path, encoding="utf-8") as fh:
+    if official_path.exists():
+        with open(official_path, encoding="utf-8") as fh:
             previous = json.load(fh)
-    if previous.get("cv_accuracy", -1) > payload["cv_accuracy"]:
-        print(f"keeping existing {params_path} "
-              f"(acc {previous['cv_accuracy']:.3f} > {payload['cv_accuracy']:.3f})")
-        params_path = cfg.models_dir / f"best_params_{args.tag}.json"
-    with open(params_path, "w", encoding="utf-8") as fh:
+    with open(tagged_path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)
+    if previous.get("cv_accuracy", -1) > payload["cv_accuracy"]:
+        print(f"keeping existing {official_path} "
+              f"(acc {previous['cv_accuracy']:.3f} > {payload['cv_accuracy']:.3f})")
+        print(f"wrote {tagged_path}")
+    else:
+        with open(official_path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
+        print(f"updated {official_path} and {tagged_path}")
 
     print(f"\nleaderboard -> {out_csv}")
     print(f"token CNN {best['accuracy']:.3f}  vs pixel CNN {PIXEL_CNN_ACC:.3f}  "

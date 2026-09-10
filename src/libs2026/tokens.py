@@ -62,6 +62,39 @@ N_TOKEN_FEATURES = N_STATIC + N_SAMPLE
 
 F_MAX_INT, F_FWHM, F_R2, F_DELTA, F_RMSE, F_VALID, F_CONTINUUM = range(N_SAMPLE)
 
+# CLI aliases for ``--sample-channels r2,delta_lambda``.
+SAMPLE_CHANNEL_ALIASES = {
+    "max_intensity": F_MAX_INT, "amp": F_MAX_INT, "amplitude": F_MAX_INT,
+    "fwhm": F_FWHM,
+    "r2": F_R2, "r^2": F_R2,
+    "delta_lambda": F_DELTA, "dlambda": F_DELTA, "delta": F_DELTA, "dl": F_DELTA,
+    "rmse": F_RMSE,
+    "fit_valid": F_VALID, "valid": F_VALID,
+    "local_continuum": F_CONTINUUM, "continuum": F_CONTINUUM,
+}
+
+
+def parse_sample_channels(spec: str) -> np.ndarray:
+    """Map a comma-separated channel list to indices into ``SAMPLE_FEATURE_NAMES``."""
+    names = [part.strip().lower() for part in spec.split(",") if part.strip()]
+    if not names:
+        raise ValueError("sample-channels must list at least one token channel")
+    keep = []
+    for name in names:
+        if name not in SAMPLE_CHANNEL_ALIASES:
+            known = ", ".join(SAMPLE_FEATURE_NAMES)
+            raise ValueError(f"Unknown token channel '{name}'. Known: {known}")
+        keep.append(SAMPLE_CHANNEL_ALIASES[name])
+    return np.asarray(keep, dtype=int)
+
+
+def channel_head_kwargs(keep) -> dict:
+    """``valid_index`` / ``n_dynamic`` after ``TokenSet.select_channels``."""
+    keep = [int(i) for i in np.asarray(keep).tolist()]
+    valid_index = keep.index(F_VALID) if F_VALID in keep else -1
+    n_dynamic = sum(1 for i in keep if i < N_DYNAMIC)
+    return {"valid_index": valid_index, "n_dynamic": n_dynamic}
+
 
 # ----------------------------------------------------------------------------
 # Voigt fitting
@@ -387,7 +420,10 @@ class TokenSet:
         return int(self.X.shape[2])
 
     def valid_fraction(self) -> float:
-        return float(self.X[..., F_VALID].mean())
+        if self.X.shape[-1] > F_VALID:
+            return float(self.X[..., F_VALID].mean())
+        # After a channel subset that dropped fit_valid, a failed Voigt is all zeros.
+        return float((np.abs(self.X).sum(axis=-1) > 0).mean())
 
     def __repr__(self) -> str:
         rows, lines, feats = self.token_shape
@@ -397,8 +433,12 @@ class TokenSet:
 
 def _tokenize_sample(cfg: Config, sample_id: str, pre: Preprocessor, shot_bin: int,
                      wavelength: np.ndarray, bounds: list[tuple[int, int]],
-                     centres: np.ndarray, fit_cfg: FitConfig) -> np.ndarray:
-    shots = pre(load_shots(cfg, sample_id, mmap=False))
+                     centres: np.ndarray, fit_cfg: FitConfig,
+                     n_shots: int | None = None) -> np.ndarray:
+    shots = load_shots(cfg, sample_id, mmap=False)
+    if n_shots is not None:
+        shots = shots[: int(n_shots)]
+    shots = pre(shots)
     if shot_bin > 1:
         n = (shots.shape[0] // shot_bin) * shot_bin
         shots = shots[:n].reshape(n // shot_bin, shot_bin, shots.shape[1]).mean(axis=1)
@@ -414,6 +454,7 @@ def build_tokens(
     dictionary: LineDictionary,
     pre: Preprocessor | None = None,
     shot_bin: int = 4,
+    n_shots: int | None = None,
     fit_cfg: FitConfig | None = None,
     n_jobs: int = 12,
     use_cache: bool = True,
@@ -424,11 +465,13 @@ def build_tokens(
     fit_cfg = fit_cfg or FitConfig()
     channel_bounds = tuple(cfg["data"].get("channel_bounds", DEFAULT_CHANNEL_BOUNDS))
     wavelength = load_wavelength(cfg)
+    n_shots = int(n_shots) if n_shots else None
 
     key = json.dumps(
         {
             "pre": asdict(pre),
             "shot_bin": shot_bin,
+            "n_shots": n_shots,
             "fit": asdict(fit_cfg),
             "dict": dictionary.config_hash,
             # Resolvable pruning does not change the dictionary cache hash, so
@@ -473,14 +516,17 @@ def build_tokens(
 
     centres = dictionary.wavelength[keep]
     index = load_index(cfg)
+    raw_shots = n_shots or int(cfg["data"].get("n_shots", 200))
+    n_rows = raw_shots // max(shot_bin, 1)
     if verbose:
-        n_rows = 200 // max(shot_bin, 1)
+        kept = f"first {raw_shots} shots" if n_shots else f"all {raw_shots} shots"
         print(f"tokenizing {len(index)} samples x ~{n_rows} rows x {keep.size} lines "
-              f"({len(index) * n_rows * keep.size / 1e6:.1f}M Voigt fits)")
+              f"({kept}, {len(index) * n_rows * keep.size / 1e6:.1f}M Voigt fits)")
 
     arrays = Parallel(n_jobs=n_jobs, verbose=5)(
         delayed(_tokenize_sample)(
             cfg, sid, pre, shot_bin, wavelength, resolved, centres, fit_cfg,
+            n_shots,
         )
         for sid in index["sample_id"]
     )

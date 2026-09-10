@@ -1,0 +1,43 @@
+{
+  "preprocessing": {
+    "repair_outlier_shots": true,
+    "outlier_z": 4.0,
+    "outlier_window": 11,
+    "bulk_fraction": 0.3,
+    "normalization_reference": "shot",
+    "baseline": "none",
+    "snip_iterations": 40,
+    "normalization": "l2",
+    "wl_min": null,
+    "wl_max": null
+  },
+  "cv": {
+    "n_splits": 5,
+    "n_repeats": 2,
+    "random_state": 42
+  },
+  "bin_factor": 8,
+  "shot_bin": 1,
+  "n_shots": 100,
+  "image_shape": [
+    100,
+    1533
+  ],
+  "channels": [
+    32,
+    64,
+    128
+  ],
+  "epochs": 180,
+  "batch_size": 16,
+  "lr": 0.001,
+  "dropout": 0.35,
+  "spectral_pca": 48,
+  "ensemble_seeds": [
+    42,
+    7,
+    123,
+    99,
+    2026
+  ]
+}

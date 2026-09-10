@@ -35,11 +35,14 @@ from libs2026.tokens import (
 )
 
 
-def _sample_spectra(cfg, pre, shot_bin, sample_ids, rows_per_sample):
+def _sample_spectra(cfg, pre, shot_bin, sample_ids, rows_per_sample, n_shots=None):
     """A few binned rows from each of a handful of samples."""
     out = []
     for sid in sample_ids:
-        shots = pre(load_shots(cfg, sid, mmap=False))
+        shots = load_shots(cfg, sid, mmap=False)
+        if n_shots is not None:
+            shots = shots[: int(n_shots)]
+        shots = pre(shots)
         n = (shots.shape[0] // shot_bin) * shot_bin
         binned = shots[:n].reshape(n // shot_bin, shot_bin, shots.shape[1]).mean(axis=1)
         out.append(binned[:rows_per_sample])
@@ -69,6 +72,9 @@ def main() -> None:
     parser.add_argument("--config", default=None)
     parser.add_argument("--shot-bin", type=int, default=None,
                         help="average consecutive shots (default from config)")
+    parser.add_argument("--n-shots", type=int, default=None,
+                        help="keep only the first N pulses (surface layer); "
+                             "default from config, 0 = all shots")
     parser.add_argument("--norm-reference", default=None, choices=["shot", "bulk"],
                         help="intensity normalisation reference (default from config)")
     parser.add_argument("--n-jobs", type=int, default=12)
@@ -83,6 +89,8 @@ def main() -> None:
     cfg.ensure_dirs()
     tok_cfg = cfg.get("tokens", {})
     shot_bin = args.shot_bin if args.shot_bin is not None else int(tok_cfg.get("shot_bin", 4))
+    n_shots = args.n_shots if args.n_shots is not None else tok_cfg.get("n_shots")
+    n_shots = int(n_shots) if n_shots else None
     fit_cfg = fit_config_from_config(cfg)
 
     pre = Preprocessor.from_config(cfg)
@@ -97,7 +105,7 @@ def main() -> None:
     if args.compare_db:
         wavelength = load_wavelength(cfg)
         ids = [f"train_{i:03d}" for i in range(1, args.compare_samples + 1)]
-        spectra = _sample_spectra(cfg, pre, shot_bin, ids, args.compare_rows)
+        spectra = _sample_spectra(cfg, pre, shot_bin, ids, args.compare_rows, n_shots)
         print(f"\ndatabase comparison on {spectra.shape[0]} spectra")
         other = build_line_dictionary(
             args.compare_db,
@@ -114,8 +122,8 @@ def main() -> None:
                   f"median|dlambda|={median_delta:.4f} nm")
 
     tokens = build_tokens(
-        cfg, dictionary, pre=pre, shot_bin=shot_bin, fit_cfg=fit_cfg,
-        n_jobs=args.n_jobs, use_cache=not args.no_cache,
+        cfg, dictionary, pre=pre, shot_bin=shot_bin, n_shots=n_shots,
+        fit_cfg=fit_cfg, n_jobs=args.n_jobs, use_cache=not args.no_cache,
     )
     train = tokens.subset("train")
     valid = train.X[..., F_VALID] > 0.5

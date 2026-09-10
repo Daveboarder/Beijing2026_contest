@@ -1,0 +1,2 @@
+model,bin_factor,n_shots,n_wavelengths,accuracy,accuracy_std,balanced_accuracy,macro_f1,seed_mean
+cnn2d_ensemble,8,100,1533,0.5166666666666667,0.035978388574871484,0.4313186813186813,0.43660164905016163,0.45499999999999996

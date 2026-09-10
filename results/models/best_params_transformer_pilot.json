@@ -1,0 +1,43 @@
+{
+  "model": "transformer",
+  "cv_accuracy": 0.2916666666666667,
+  "balanced_accuracy": 0.20285714285714285,
+  "macro_f1": 0.17872482474685655,
+  "seed_accuracies": [
+    0.2916666666666667
+  ],
+  "pixel_cnn_cv": 0.575,
+  "token_cnn_cv": 0.542,
+  "classical_pca_mlp_oof": 0.7145833333333333,
+  "blend_accuracy": 0.7229166666666667,
+  "blend_w_transformer": 0.7000000000000001,
+  "blend_partner": "pca_mlp",
+  "params": {
+    "bin_factor": 8,
+    "shot_bin": 4,
+    "n_shots": null,
+    "norm_reference": "shot",
+    "kernel_sizes": [
+      3,
+      7,
+      15
+    ],
+    "conv_channels": 32,
+    "d_model": 128,
+    "n_layers": 2,
+    "n_heads": 4,
+    "ff_mult": 2,
+    "dropout": 0.3,
+    "encoder_dropout": 0.1,
+    "epochs": 150,
+    "batch_size": 16,
+    "lr": 0.0003,
+    "weight_decay": 0.01,
+    "noise_std": 0.03,
+    "wl_shift": 2,
+    "shot_mask_p": 0.1,
+    "ensemble_seeds": [
+      42
+    ]
+  }
+}

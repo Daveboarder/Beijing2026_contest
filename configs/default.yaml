@@ -99,8 +99,12 @@ tokens:
   # neighbour and the static physics channels end up describing the wrong
   # transition. Set to 0 to keep every line.
   min_separation_pixels: 2.0
-  # Consecutive shots averaged before fitting; 4 gives 50 depth rows.
+  # Consecutive shots averaged before fitting; 4 gives 50 depth rows on the
+  # full 200-shot profile. Use 1 when keeping only the first ~30 shots so the
+  # surface layer is not reduced to a handful of rows.
   shot_bin: 4
+  # Keep only the first N pulses (the aged surface). null = all 200 shots.
+  n_shots: null
   fit:
     window_nm: 0.3
     gamma_init: 0.1

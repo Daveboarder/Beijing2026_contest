@@ -19,10 +19,18 @@ from .preprocessing import Preprocessor
 from .tokens import FitConfig, TokenSet, build_tokens, line_dictionary_from_config
 
 try:
-    from .cnn import DepthSpectrumCNN, SpectrumCNN, TokenCNN
+    from .cnn import (
+        DepthSpectrumCNN,
+        DepthTransformer,
+        SpectrumCNN,
+        SpectrumTransformer,
+        TokenCNN,
+    )
 except ImportError:  # torch is an optional extra
     DepthSpectrumCNN = None  # type: ignore[misc, assignment]
+    DepthTransformer = None  # type: ignore[misc, assignment]
     SpectrumCNN = None  # type: ignore[misc, assignment]
+    SpectrumTransformer = None  # type: ignore[misc, assignment]
     TokenCNN = None  # type: ignore[misc, assignment]
 
 __all__ = [
@@ -34,6 +42,7 @@ __all__ = [
     "BinnedPCA",
     "Config",
     "DepthSpectrumCNN",
+    "DepthTransformer",
     "FitConfig",
     "ImageSet",
     "LineDictionary",
@@ -41,6 +50,7 @@ __all__ = [
     "FeatureSet",
     "PLSDA",
     "SpectrumCNN",
+    "SpectrumTransformer",
     "TokenCNN",
     "TokenSet",
     "CVResult",

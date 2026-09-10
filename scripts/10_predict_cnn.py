@@ -47,6 +47,8 @@ def main() -> None:
     parser.add_argument("--config", default=None)
     parser.add_argument("--bin-factor", type=int, default=None)
     parser.add_argument("--shot-bin", type=int, default=None)
+    parser.add_argument("--n-shots", type=int, default=None,
+                        help="keep only the first N pulses; 0 = all shots")
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--lr", type=float, default=None)
@@ -79,6 +81,8 @@ def main() -> None:
 
     bin_factor = int(pick("bin_factor", default=8))
     shot_bin = int(pick("shot_bin", default=4))
+    n_shots_raw = args.n_shots if args.n_shots is not None else best.get("n_shots")
+    n_shots = int(n_shots_raw) if n_shots_raw else None
     epochs = int(pick("epochs", default=180))
     batch_size = int(pick("batch_size", default=16))
     lr = float(pick("lr", default=1e-3))
@@ -100,7 +104,8 @@ def main() -> None:
         seeds = [int(s) for s in seeds_raw.split(",") if s.strip()]
 
     pre = replace(Preprocessor.from_config(cfg), normalization_reference=norm_reference)
-    images = build_images(cfg, pre, bin_factor=bin_factor, shot_bin=shot_bin, n_jobs=args.n_jobs)
+    images = build_images(cfg, pre, bin_factor=bin_factor, shot_bin=shot_bin,
+                          n_shots=n_shots, n_jobs=args.n_jobs)
     train, test = images.subset("train"), images.subset("test")
     n_shots, n_wl = train.image_shape
     Xtr, ytr = train.as_flat(), train.y.astype(int)
@@ -138,7 +143,7 @@ def main() -> None:
     joblib.dump(
         {
             "models": models, "seeds": seeds, "bin_factor": bin_factor,
-            "shot_bin": shot_bin, "image_shape": (n_shots, n_wl),
+            "shot_bin": shot_bin, "n_shots": n_shots, "image_shape": (n_shots, n_wl),
             "norm_reference": norm_reference,
         },
         cfg.models_dir / f"fitted_cnn2d_{stamp}.joblib",

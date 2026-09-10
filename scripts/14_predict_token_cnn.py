@@ -23,8 +23,10 @@ from libs2026.cnn import TokenCNN
 from libs2026.evaluation import predict_scores
 from libs2026.tokens import (
     build_tokens,
+    channel_head_kwargs,
     fit_config_from_config,
     line_dictionary_from_config,
+    parse_sample_channels,
 )
 
 
@@ -57,12 +59,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default=None)
     parser.add_argument("--shot-bin", type=int, default=None)
+    parser.add_argument("--n-shots", type=int, default=None,
+                        help="keep only the first N pulses; 0 = all shots")
     parser.add_argument("--norm-reference", default=None, choices=["shot", "bulk"])
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--lr", type=float, default=None)
     parser.add_argument("--dropout", type=float, default=None)
     parser.add_argument("--channels", default=None)
+    parser.add_argument("--sample-channels", default=None,
+                        help="comma-separated per-sample token channels, e.g. r2,delta_lambda")
+    parser.add_argument("--no-static", action="store_true",
+                        help="drop dictionary physics channels")
     parser.add_argument("--ensemble-seeds", default=None)
     parser.add_argument("--blend-oof", default=None,
                         help="classical model to blend with, e.g. pca_mlp")
@@ -92,6 +100,10 @@ def main() -> None:
         return default
 
     shot_bin = pick("shot_bin", int, int(tok_cfg.get("shot_bin", 4)))
+    n_shots_raw = args.n_shots if args.n_shots is not None else best.get(
+        "n_shots", tok_cfg.get("n_shots")
+    )
+    n_shots = int(n_shots_raw) if n_shots_raw else None
     norm_reference = pick("norm_reference", str, "bulk")
     epochs = pick("epochs", int, 150)
     batch_size = pick("batch_size", int, 16)
@@ -109,8 +121,18 @@ def main() -> None:
     pre = replace(Preprocessor.from_config(cfg), normalization_reference=norm_reference)
     dictionary = line_dictionary_from_config(cfg, verbose=False)
     tokens = build_tokens(cfg, dictionary, pre=pre, shot_bin=shot_bin,
-                          fit_cfg=fit_config_from_config(cfg), n_jobs=args.n_jobs)
+                          n_shots=n_shots, fit_cfg=fit_config_from_config(cfg),
+                          n_jobs=args.n_jobs)
     train, test = tokens.subset("train"), tokens.subset("test")
+    sample_channels = args.sample_channels if args.sample_channels is not None else best.get(
+        "sample_channels"
+    )
+    extra_kw = {}
+    if sample_channels:
+        keep = parse_sample_channels(sample_channels)
+        train, test = train.select_channels(keep), test.select_channels(keep)
+        extra_kw = channel_head_kwargs(keep)
+    include_static = bool(best.get("include_static", True)) and not args.no_static
     rows, lines, feats = train.token_shape
     x_train, y_train = train.as_flat(), train.y.astype(int)
     x_test = test.as_flat()
@@ -121,8 +143,10 @@ def main() -> None:
         model = TokenCNN(
             static=train.static, feature_mean=train.feature_mean,
             feature_std=train.feature_std, n_rows=rows, n_lines=lines, n_features=feats,
-            channels=channels, dropout=dropout, epochs=epochs,
-            batch_size=batch_size, lr=lr, device=args.device, random_state=int(seed),
+            channels=channels, dropout=dropout, depth_bins=min(12, max(4, rows // 3)),
+            epochs=epochs, batch_size=batch_size, lr=lr, device=args.device,
+            include_static=include_static, random_state=int(seed),
+            **extra_kw,
         )
         model.fit(x_train, y_train)
         p = model.predict_proba(x_test)
@@ -155,7 +179,7 @@ def main() -> None:
     submission.to_csv(out, index=False)
     joblib.dump(
         {"models": models, "seeds": seeds, "shot_bin": shot_bin,
-         "norm_reference": norm_reference, "n_lines": lines,
+         "n_shots": n_shots, "norm_reference": norm_reference, "n_lines": lines,
          "blend": blend_name, "blend_weight": blend_weight},
         cfg.models_dir / f"fitted_token_cnn_{stamp}.joblib",
     )

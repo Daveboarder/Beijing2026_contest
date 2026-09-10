@@ -149,7 +149,8 @@ Consequences for the pipeline:
 | `10_predict_cnn.py` | Fit the CNN and write a contest submission. |
 | `11_tune_cnn.py` | GPU hyperparameter sweep for the pixel CNN. |
 | `12_build_tokens.py` | Voigt-fits every spectral line into a token cache, with fit diagnostics. |
-| `13_benchmark_token_cnn.py` | 2-D CNN over spectral-line tokens. |
+| `15_benchmark_transformer.py` | Multi-scale 1-D CNN tokeniser + depth Transformer. |
+| `16_tune_transformer.py` | Regularisation screen for the depth Transformer. |
 | `14_predict_token_cnn.py` | Fit the token CNN (optionally blended) and write a submission. |
 
 ## Methods being compared
@@ -300,6 +301,7 @@ Grouped 5-fold, 5-seed ensemble (the same protocol as the pixel CNN):
 | --- | --- | --- |
 | Token CNN, 722 lines, shot-norm | **0.542** | 5 seeds × 2 repeats; seed mean 0.50 ± 0.03 |
 | Token CNN, 722 lines, bulk-norm | 0.525 | same protocol; shot-norm wins the sweep |
+| Token CNN, first 30 shots only | 0.492 | surface layer without the bulk plateau; worse |
 | Token CNN, top-250 lines | 0.542 | 3-seed bulk ablation; matches shot-norm with fewer columns |
 | Amplitude-only tokens | 0.333 | Voigt extras and static channels do earn their place |
 | `pca_mlp` on token amplitudes | 0.421 ± 0.025 | 2-D structure of the token image matters |
@@ -313,6 +315,32 @@ weight 0.6 token / 0.4 pixel reaches 0.608, between the two neural models.
 
 `scripts/14_predict_token_cnn.py` loads `results/models/best_params_token_cnn.json`
 and, unless overridden, applies that 50/50 blend on the test set.
+
+## Multi-scale CNN tokeniser + depth Transformer
+
+Each shot is tokenised on its own by three parallel 1-D convolutions over
+wavelength (kernel widths 3, 7, 15) into a single 128-d embedding, then a
+2-layer TransformerEncoder models the depth sequence (surface → bulk). No
+spectral PCA: neighbouring wavelength bins must stay neighbours for the
+multi-scale kernels. At `bin_factor=8` / `shot_bin=4` this yields 50 depth
+tokens of width 128 (~423k parameters).
+
+```bash
+uv run --extra cnn python scripts/15_benchmark_transformer.py --device cuda
+# or: make transformer
+# regularisation screen: make transformer-tune
+```
+
+Heavy dropout / weight decay collapses the model to a constant 1/5 posterior
+at N=120 (pilot 0.292). The `no_reg` settings from
+`scripts/16_tune_transformer.py` (dropout 0, weight decay 1e-4, no shot masking)
+are the defaults:
+
+| Model | accuracy | notes |
+| --- | --- | --- |
+| Multiscale + depth TF (no_reg, 5 seeds) | **0.475** | seed mean 0.42 ± 0.04; below pixel/token CNNs |
+| 50/50 blend with `pca_mlp` | **0.729 ± 0.014** | small lift over classical 0.715 |
+| Classical `pca_mlp` | 0.715 ± 0.041 | still the safer standalone |
 
 ## Working with more rows per sample
 

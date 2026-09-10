@@ -4,7 +4,7 @@ MODEL  ?= pca_mlp
 PY     ?= uv run python
 PY_CNN ?= uv run --extra cnn python
 
-.PHONY: all setup prepare explore benchmark benchmark-groups preprocessing tune submission cnn cnn-submit tokens token-cnn token-submit lint clean-cache
+.PHONY: all setup prepare explore benchmark benchmark-groups preprocessing tune submission cnn cnn-submit tokens token-cnn token-submit cnn-s100 token-cnn-s100 transformer lint clean-cache
 
 all: prepare explore benchmark
 
@@ -53,6 +53,26 @@ token-cnn:
 
 token-submit:
 	$(PY_CNN) scripts/14_predict_token_cnn.py --device cuda --n-jobs $(N_JOBS)
+
+# Last-chance neural: first 100 shots. Pixel CNN keeps the spectrum; token CNN
+# keeps only Voigt R^2 and centroid shift (no amplitude, no dictionary static).
+cnn-s100:
+	$(PY_CNN) scripts/09_benchmark_cnn.py --device cuda --n-shots 100 --shot-bin 1 \
+		--tag cnn2d_s100 --n-jobs $(N_JOBS)
+
+token-cnn-s100:
+	$(PY_CNN) scripts/13_benchmark_token_cnn.py --device cuda --n-shots 100 --shot-bin 1 \
+		--sample-channels r2,delta_lambda --no-static --tag token_cnn_s100_r2dl \
+		--n-jobs $(N_JOBS)
+
+# Multi-scale 1-D conv tokeniser (kernels 3/7/15 -> 128-d per shot) followed by
+# a transformer over the depth sequence. Defaults are the no_reg settings from
+# scripts/16_tune_transformer.py (heavy dropout collapses this model at N=120).
+transformer:
+	$(PY_CNN) scripts/15_benchmark_transformer.py --device cuda --n-jobs $(N_JOBS)
+
+transformer-tune:
+	$(PY_CNN) scripts/16_tune_transformer.py --device cuda --n-jobs $(N_JOBS)
 
 lint:
 	uv run ruff check src scripts

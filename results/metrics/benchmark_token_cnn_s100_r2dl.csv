@@ -1,0 +1,2 @@
+model,norm_reference,n_shots,n_rows,n_lines,n_features,include_static,sample_channels,accuracy,balanced_accuracy,macro_f1,seed_mean,seed_std
+token_cnn_shot,shot,100,100,722,2,False,"r2,delta_lambda",0.4,0.2815384615384615,0.28210486742000596,0.3833333333333333,0.0519080383413248

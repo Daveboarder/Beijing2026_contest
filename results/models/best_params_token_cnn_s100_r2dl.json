@@ -1,0 +1,49 @@
+{
+  "model": "token_cnn",
+  "cv_accuracy": 0.4,
+  "balanced_accuracy": 0.2815384615384615,
+  "macro_f1": 0.28210486742000596,
+  "seed_accuracies": [
+    0.3416666666666667,
+    0.48333333333333334,
+    0.35833333333333334,
+    0.38333333333333336,
+    0.35
+  ],
+  "pixel_cnn_cv": 0.575,
+  "classical_pca_mlp_oof": 0.7145833333333333,
+  "blend_accuracy": 0.7166666666666667,
+  "blend_w_cnn": 0.1,
+  "blend_partner": "pca_mlp",
+  "stack_lr_accuracy": 0.6916666666666667,
+  "params": {
+    "norm_reference": "shot",
+    "shot_bin": 1,
+    "n_shots": 100,
+    "n_rows": 100,
+    "n_lines": 722,
+    "n_features": 2,
+    "sample_channels": "r2,delta_lambda",
+    "include_static": false,
+    "channels": [
+      32,
+      64,
+      128
+    ],
+    "dropout": 0.4,
+    "token_dropout": 0.1,
+    "noise_std": 0.05,
+    "epochs": 150,
+    "batch_size": 16,
+    "lr": 0.001,
+    "ensemble_seeds": [
+      42,
+      7,
+      123,
+      99,
+      2026
+    ],
+    "blend_oof": "pca_mlp",
+    "blend_weight": 0.1
+  }
+}

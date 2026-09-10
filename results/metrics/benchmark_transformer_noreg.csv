@@ -1,0 +1,2 @@
+model,bin_factor,shot_bin,n_shots,n_tokens,n_wavelengths,kernel_sizes,d_model,n_layers,accuracy,accuracy_std,balanced_accuracy,macro_f1,seed_mean
+transformer,8,4,200,50,1533,"3,7,15",128,2,0.475,0.04163331998932265,0.4363736263736264,0.4325055336820043,0.4183333333333333
