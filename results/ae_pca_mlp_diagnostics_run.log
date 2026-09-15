@@ -1,0 +1,74 @@
+repeat=0 fold=0 epoch=39 pca=0.667 cls=0.667 fused=0.667 Wcls=0.69
+repeat=0 fold=1 epoch=10 pca=0.520 cls=0.520 fused=0.520 Wcls=0.67
+repeat=0 fold=2 epoch=16 pca=0.625 cls=0.667 fused=0.667 Wcls=0.68
+repeat=0 fold=3 epoch=19 pca=0.652 cls=0.652 fused=0.652 Wcls=0.68
+repeat=0 fold=4 epoch=8 pca=0.667 cls=0.458 fused=0.625 Wcls=0.67
+repeat=1 fold=0 epoch=22 pca=0.640 cls=0.760 fused=0.760 Wcls=0.68
+repeat=1 fold=1 epoch=11 pca=0.667 cls=0.583 fused=0.625 Wcls=0.67
+repeat=1 fold=2 epoch=17 pca=0.625 cls=0.583 fused=0.667 Wcls=0.68
+repeat=1 fold=3 epoch=24 pca=0.375 cls=0.375 fused=0.375 Wcls=0.68
+repeat=1 fold=4 epoch=32 pca=0.609 cls=0.696 fused=0.696 Wcls=0.69
+repeat=2 fold=0 epoch=15 pca=0.500 cls=0.583 fused=0.708 Wcls=0.67
+repeat=2 fold=1 epoch=24 pca=0.833 cls=0.667 fused=0.708 Wcls=0.68
+repeat=2 fold=2 epoch=28 pca=0.750 cls=0.750 fused=0.792 Wcls=0.68
+repeat=2 fold=3 epoch=12 pca=0.500 cls=0.500 fused=0.500 Wcls=0.67
+repeat=2 fold=4 epoch=16 pca=0.583 cls=0.542 fused=0.667 Wcls=0.68
+repeat=3 fold=0 epoch=15 pca=0.560 cls=0.520 fused=0.480 Wcls=0.67
+repeat=3 fold=1 epoch=17 pca=0.542 cls=0.583 fused=0.458 Wcls=0.68
+repeat=3 fold=2 epoch=9 pca=0.542 cls=0.667 fused=0.708 Wcls=0.66
+repeat=3 fold=3 epoch=6 pca=0.792 cls=0.583 fused=0.583 Wcls=0.66
+repeat=3 fold=4 epoch=26 pca=0.609 cls=0.609 fused=0.565 Wcls=0.68
+{
+  "summary": [
+    {
+      "model": "pca_only",
+      "accuracy": 0.6125,
+      "accuracy_std": 0.019094065395649312,
+      "balanced_accuracy": 0.5356730769230769,
+      "macro_f1": 0.5524718388805918
+    },
+    {
+      "model": "cls_only",
+      "accuracy": 0.5979166666666667,
+      "accuracy_std": 0.006909634979907058,
+      "balanced_accuracy": 0.5448214285714286,
+      "macro_f1": 0.551222811299116
+    },
+    {
+      "model": "fused",
+      "accuracy": 0.6208333333333333,
+      "accuracy_std": 0.0414578098794425,
+      "balanced_accuracy": 0.5637637362637362,
+      "macro_f1": 0.5697875796054923
+    },
+    {
+      "model": "cls_linear",
+      "accuracy": 0.575,
+      "accuracy_std": 0.03280836614171585,
+      "balanced_accuracy": 0.5189148351648352,
+      "macro_f1": 0.5294351837935655
+    }
+  ],
+  "agreement": {
+    "pca_correct": 0.65,
+    "fused_correct": 0.65,
+    "cls_correct": 0.6166666666666667,
+    "fused_fixes_pca": 12,
+    "fused_breaks_pca": 12,
+    "both_correct": 66,
+    "both_wrong": 30
+  },
+  "aggregates": {
+    "mean_mlp_cls_weight_frac": 0.6758937512251777,
+    "mean_cls_pca_cross_fro": 7.38122661113739,
+    "mean_cls_label_corr": 0.31747427724677096,
+    "mean_pca_label_corr": 0.11335627362743268,
+    "mean_cls_nn_train": 0.8414505900705371,
+    "mean_cls_nn_test": 0.5486304347826088,
+    "mean_gap_train_test_cls": 0.4017572463768116,
+    "mean_gap_train_test_pca": 0.38718840579710145,
+    "mean_gap_train_test_fused": 0.3788478260869566
+  },
+  "seed": 42
+}
+Wrote /mnt/data/projects/Running_projects/26_0161_LIBS_data_challenge_2026/Methods/David/Beijing2026_contest/results/ae_pca_mlp/diagnostics

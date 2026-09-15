@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin, clone
+from sklearn.compose import ColumnTransformer
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
@@ -211,6 +212,27 @@ def build_model_zoo(n_pca: int = 30) -> dict[str, Pipeline]:
         ]),
     }
     return zoo
+
+
+def build_pca_mlp_with_extras(n_spectral: int, n_pca: int = 30,
+                              hidden_layer_sizes=(128, 64), alpha: float = 1e-3) -> Pipeline:
+    """``pca_mlp`` with extra descriptors appended after the PCA.
+
+    Columns ``[:n_spectral]`` are the spectrum and go through scaling + PCA as
+    in ``pca_mlp``; the remaining columns (plasma temperature, electron
+    density, ...) bypass the PCA, where a handful of variables would be lost
+    among thousands of pixels, and join the scores before the MLP.
+    """
+    return Pipeline([
+        ("split", ColumnTransformer([
+            ("spectrum", Pipeline([("scale", StandardScaler()), ("pca", _pca(n_pca))]),
+             slice(0, n_spectral)),
+            ("extras", "passthrough", slice(n_spectral, None)),
+        ])),
+        ("scale2", StandardScaler()),
+        ("clf", MLPClassifier(hidden_layer_sizes=hidden_layer_sizes, max_iter=2000,
+                              alpha=alpha, random_state=RANDOM_STATE)),
+    ])
 
 
 def get_model(name: str, n_pca: int = 30) -> Pipeline:

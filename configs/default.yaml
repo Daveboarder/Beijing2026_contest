@@ -132,3 +132,36 @@ depth_transformer:
   lr: 0.0003
   dropout: 0.2
   seeds: [42, 7, 123]
+
+# Transformer autoencoder on the same raw depth sequences: sinusoidal wavelength
+# PE, glued CLS representation, MSE reconstruction + MLP with one-hot class targets.
+autotransformer:
+  # Preparation mirrors depth_transformer (shared prepare_sample / depth windows).
+  bin_factor: 4
+  surface_shots: 20
+  late_bin: 4
+  d_model: 64
+  n_layers: 2
+  n_heads: 4
+  ff_dim: 128
+  dropout: 0.1
+  lambda_recon: 1.0
+  epochs: 100
+  patience: 15
+  batch_size: 8
+  lr: 0.0003
+  weight_decay: 0.001
+  seeds: [42, 7, 123]
+
+# Fuse autoencoder CLS embeddings with PCA(mean_lines) scores, then MLP.
+# Classical side uses n_groups=4; each sample CLS is broadcast onto its rows.
+# AE prep/hparams fall back to autotransformer when omitted here.
+ae_pca_mlp:
+  encoding: mean_lines
+  n_groups: 4
+  classical_bin_factor: 1
+  n_pca: 30
+  mlp_hidden: [256, 128]
+  mlp_alpha: 0.0001
+  mlp_max_iter: 2000
+  seeds: [42, 7, 123]

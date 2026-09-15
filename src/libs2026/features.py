@@ -24,8 +24,8 @@ from joblib import Parallel, delayed
 
 from .config import Config
 from .data import load_index, load_shots, load_wavelength
-from .depth import encode_sample, line_indices
-from .preprocessing import Preprocessor
+from .depth import bin_means, encode_sample, line_indices, log_bin_edges
+from .preprocessing import Preprocessor, normalize, repair_outlier_shots, shot_outlier_mask
 
 
 class FeatureSet:
@@ -177,6 +177,64 @@ def build_features(
     with open(cache_file.with_suffix(".json"), "w", encoding="utf-8") as fh:
         fh.write(key)
     return FeatureSet(X, y, sample_ids, groups, split, axis)
+
+
+def _depth_bin_rows(cfg: Config, sample_id: str, drop_shots: int, n_bins_list, bounds,
+                    outlier_z: float, outlier_window: int) -> dict[int, np.ndarray]:
+    """SNV-normalised log-depth-bin spectra of one sample for every requested bin count."""
+    shots = np.asarray(load_shots(cfg, sample_id, mmap=False), dtype=np.float32)
+    # Repair before dropping, so the local depth trend around shot 4 is still judged
+    # against its real neighbours.
+    shots = repair_outlier_shots(shots, shot_outlier_mask(shots, outlier_z, outlier_window))
+    shots = shots[drop_shots:]
+    out = {}
+    for n in n_bins_list:
+        means = bin_means(shots, log_bin_edges(shots.shape[0], n))
+        out[n] = normalize(means, method="snv", per_channel=True, bounds=bounds)
+    return out
+
+
+def build_depth_bin_spectra(
+    cfg: Config,
+    drop_shots: int = 3,
+    n_bins=(4, 8, 12),
+    n_jobs: int = 8,
+    use_cache: bool = True,
+) -> dict[int, dict]:
+    """Depth trajectories of SNV spectra: ``{n_bins: {"X": (n_samples, n_actual_bins, n_wl), ...}}``.
+
+    The first ``drop_shots`` surface shots are removed, the rest is averaged in
+    log-spaced depth bins (fine near the surface) and every bin spectrum gets a
+    per-channel SNV. SNV acts on each spectrum alone, so it cannot leak across
+    CV folds; any PCA on top must still be fitted inside the folds.
+
+    ``log_bin_edges`` merges bins that would hold less than one shot, so the
+    actual bin count can be below the requested one; it is ``X.shape[1]``.
+    """
+    bounds = tuple(cfg["data"].get("channel_bounds", (0, 4094, 8188, 12282)))
+    pre = cfg["preprocessing"]
+    cache_dir = cfg.cache_dir / "depth_snv"
+    paths = {n: cache_dir / f"drop{drop_shots}_b{n}.npz" for n in n_bins}
+    index = load_index(cfg)
+
+    if not (use_cache and all(p.exists() for p in paths.values())):
+        results = Parallel(n_jobs=n_jobs, verbose=5)(
+            delayed(_depth_bin_rows)(cfg, sid, drop_shots, tuple(n_bins), bounds,
+                                     pre.get("outlier_z", 4.0), pre.get("outlier_window", 11))
+            for sid in index["sample_id"]
+        )
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        for n, path in paths.items():
+            np.savez(path, X=np.stack([r[n] for r in results]).astype(np.float32),
+                     sample_ids=index["sample_id"].to_numpy(), split=index["split"].to_numpy(),
+                     label=index["label"].fillna(-1).to_numpy(dtype=int))
+
+    out = {}
+    for n, path in paths.items():
+        blob = np.load(path, allow_pickle=True)
+        out[n] = {"X": blob["X"], "sample_ids": blob["sample_ids"], "split": blob["split"],
+                  "label": blob["label"]}
+    return out
 
 
 def aggregate_predictions(sample_ids: np.ndarray, proba: np.ndarray,

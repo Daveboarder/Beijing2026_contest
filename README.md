@@ -359,3 +359,45 @@ uv run --extra cnn python scripts/15_depth_transformer.py benchmark --device cud
 
 Synthetic tests verify the implementation; contest accuracy must be measured
 on the training host with the actual spectral data.
+
+## Transformer autoencoder + CLS MLP
+
+A sibling experiment reconstructs the same raw depth sequences with a
+Transformer encoder (sinusoidal wavelength PE, glued CLS) and classifies from
+the CLS state with an MLP against 5-dim one-hot targets. See
+[docs/autotransformer.md](docs/autotransformer.md).
+
+```bash
+uv run --extra cnn python scripts/16_autotransformer.py benchmark --device cuda --tag initial
+```
+
+## Fe plasma temperature (Boltzmann plot)
+
+`scripts/20_boltzmann_temperature.py` (library: `src/libs2026/boltzmann.py`)
+measures the Fe I excitation temperature of every sample and depth bin, plus
+n_e from the H-alpha Stark width. Fe I lines come from the air database, are
+screened for blends, self-absorption and implausible assignments, and are
+reduced to the combination that lies on one straight Boltzmann line.
+
+* The three channels are not cross-calibrated (UV lines sit ~5 ln units below
+  visible ones), so lines are taken from channel 2 only and a linear
+  ln-response in wavelength is fitted jointly with all Boltzmann plots.
+* Result: 18 Fe I lines, E_k 3.2–6.7 eV, median R² 0.991, T ≈ 7,960 K.
+  T decreases with aging level (Spearman ρ = −0.26, p = 0.004); n_e rises
+  (ρ = +0.42, p = 1.5e-6).
+* Saha-Boltzmann is skipped: with the 1 ms gate no Fe II line in channel 2 is
+  both measurable and plausibly assigned.
+
+```bash
+uv run python scripts/20_boltzmann_temperature.py --db /path/to/LIBS_data.db
+```
+
+## AE CLS + PCA + MLP fusion
+
+Concatenate frozen autoencoder CLS embeddings (broadcast onto `n_groups=4`
+classical rows) with PCA scores from `mean_lines`, then classify with an MLP.
+See [docs/ae_pca_mlp.md](docs/ae_pca_mlp.md).
+
+```bash
+uv run --extra cnn python scripts/17_ae_pca_mlp.py benchmark --device cuda --tag g4_broadcast
+```

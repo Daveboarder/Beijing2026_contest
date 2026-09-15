@@ -1,0 +1,2 @@
+model,accuracy_std,accuracy,balanced_accuracy,macro_f1
+autotransformer,0.0,0.475,0.33472527472527475,0.31971752405219

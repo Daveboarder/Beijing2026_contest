@@ -1,0 +1,2 @@
+model,accuracy_std,accuracy,balanced_accuracy,macro_f1
+ae_pca_mlp,0.0,0.5,0.4224175824175824,0.4297389355705499

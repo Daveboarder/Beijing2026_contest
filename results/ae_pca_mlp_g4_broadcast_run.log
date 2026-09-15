@@ -1,0 +1,22 @@
+ae_pca_mlp repeat=0 fold=0 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=0 fold=1 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=0 fold=2 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=0 fold=3 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=0 fold=4 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=1 fold=0 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=1 fold=1 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=1 fold=2 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=1 fold=3 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=1 fold=4 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=2 fold=0 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=2 fold=1 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=2 fold=2 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=2 fold=3 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=2 fold=4 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=3 fold=0 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=3 fold=1 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=3 fold=2 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=3 fold=3 n_groups=4 n_pca=30 d_model=64
+ae_pca_mlp repeat=3 fold=4 n_groups=4 n_pca=30 d_model=64
+{'model': 'ae_pca_mlp', 'accuracy_std': 0.02243818669639376, 'accuracy': 0.5958333333333333, 'balanced_accuracy': 0.5420741758241758, 'macro_f1': 0.549130945803011}
+Results and refit recipes: /mnt/data/projects/Running_projects/26_0161_LIBS_data_challenge_2026/Methods/David/Beijing2026_contest/results/ae_pca_mlp/g4_broadcast

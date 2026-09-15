@@ -1,0 +1,684 @@
+{
+  "config": {
+    "paths": {
+      "raw_data": "../../../Data/competition_data_release/competition_data_release",
+      "cache": "cache",
+      "results": "results",
+      "submissions": "submissions"
+    },
+    "data": {
+      "n_shots": 200,
+      "n_wavelengths": 12282,
+      "channel_bounds": [
+        0,
+        4094,
+        8188,
+        12282
+      ]
+    },
+    "features": {
+      "encoding": "mean_lines",
+      "n_bins": 8,
+      "augment": "surface"
+    },
+    "preprocessing": {
+      "repair_outlier_shots": true,
+      "outlier_z": 4.0,
+      "outlier_window": 11,
+      "bulk_fraction": 0.3,
+      "normalization_reference": "bulk",
+      "baseline": "none",
+      "snip_iterations": 40,
+      "normalization": "l2",
+      "wl_min": null,
+      "wl_max": null
+    },
+    "cv": {
+      "n_splits": 5,
+      "n_repeats": 4,
+      "random_state": 42
+    },
+    "cnn": {
+      "bin_factor": 8,
+      "shot_bin": 4,
+      "spectral_pca": 48,
+      "epochs": 180,
+      "batch_size": 16,
+      "lr": 0.001,
+      "dropout": 0.35,
+      "channels": [
+        32,
+        64,
+        128
+      ],
+      "ensemble_seeds": [
+        42,
+        7,
+        123,
+        99,
+        2026
+      ]
+    },
+    "tokens": {
+      "db_path": "/mnt/data/projects/Running_projects/26_0153_Foundation_model/Methods/LIBS_foundation/external_data/Source/LIBS_data.db",
+      "elements": [
+        "Fe",
+        "Cr",
+        "Ni",
+        "Mn",
+        "Si",
+        "Mo",
+        "V",
+        "Cu",
+        "Ti",
+        "Al",
+        "C",
+        "H",
+        "O",
+        "N"
+      ],
+      "te_range": [
+        6500.0,
+        11000.0
+      ],
+      "ne_range": [
+        1e+17,
+        5e+17
+      ],
+      "n_te": 10,
+      "n_ne": 10,
+      "percent": 10.0,
+      "min_keep": 10,
+      "min_separation_pixels": 2.0,
+      "shot_bin": 4,
+      "fit": {
+        "window_nm": 0.3,
+        "gamma_init": 0.1,
+        "sigma_init": 0.006,
+        "r2_min": 0.0,
+        "min_snr": 3.0,
+        "maxfev": 600,
+        "max_shift_pixels": 1.5
+      }
+    },
+    "output": {
+      "submission_name": "predictions.csv"
+    },
+    "depth_transformer": {
+      "bin_factor": 4,
+      "surface_shots": 20,
+      "late_bin": 4,
+      "bulk_start": 140,
+      "epochs": 100,
+      "patience": 15,
+      "batch_size": 8,
+      "lr": 0.0003,
+      "dropout": 0.2,
+      "seeds": [
+        42,
+        7,
+        123
+      ]
+    }
+  },
+  "preparation": {
+    "bin_factor": 4,
+    "surface_shots": 20,
+    "late_bin": 4
+  },
+  "model_params": {
+    "channel_widths": [
+      1023,
+      1023,
+      1023
+    ],
+    "n_shots": 200,
+    "surface_shots": 20,
+    "late_bin": 4,
+    "bulk_start": 140,
+    "epochs": 100,
+    "batch_size": 8,
+    "patience": 15,
+    "lr": 0.0003,
+    "dropout": 0.2,
+    "use_intensity": true,
+    "depth_encoder": "pool"
+  },
+  "seeds": [
+    42,
+    7,
+    123
+  ],
+  "epochs_by_seed": {
+    "42": 27,
+    "7": 37,
+    "123": 42
+  },
+  "epoch_selection": [
+    {
+      "repeat": 0,
+      "seed": 42,
+      "fold": 0,
+      "epochs": 99
+    },
+    {
+      "repeat": 0,
+      "seed": 42,
+      "fold": 1,
+      "epochs": 27
+    },
+    {
+      "repeat": 0,
+      "seed": 42,
+      "fold": 2,
+      "epochs": 27
+    },
+    {
+      "repeat": 0,
+      "seed": 42,
+      "fold": 3,
+      "epochs": 38
+    },
+    {
+      "repeat": 0,
+      "seed": 42,
+      "fold": 4,
+      "epochs": 27
+    },
+    {
+      "repeat": 0,
+      "seed": 7,
+      "fold": 0,
+      "epochs": 37
+    },
+    {
+      "repeat": 0,
+      "seed": 7,
+      "fold": 1,
+      "epochs": 4
+    },
+    {
+      "repeat": 0,
+      "seed": 7,
+      "fold": 2,
+      "epochs": 43
+    },
+    {
+      "repeat": 0,
+      "seed": 7,
+      "fold": 3,
+      "epochs": 68
+    },
+    {
+      "repeat": 0,
+      "seed": 7,
+      "fold": 4,
+      "epochs": 63
+    },
+    {
+      "repeat": 0,
+      "seed": 123,
+      "fold": 0,
+      "epochs": 53
+    },
+    {
+      "repeat": 0,
+      "seed": 123,
+      "fold": 1,
+      "epochs": 94
+    },
+    {
+      "repeat": 0,
+      "seed": 123,
+      "fold": 2,
+      "epochs": 23
+    },
+    {
+      "repeat": 0,
+      "seed": 123,
+      "fold": 3,
+      "epochs": 33
+    },
+    {
+      "repeat": 0,
+      "seed": 123,
+      "fold": 4,
+      "epochs": 19
+    },
+    {
+      "repeat": 1,
+      "seed": 42,
+      "fold": 0,
+      "epochs": 27
+    },
+    {
+      "repeat": 1,
+      "seed": 42,
+      "fold": 1,
+      "epochs": 19
+    },
+    {
+      "repeat": 1,
+      "seed": 42,
+      "fold": 2,
+      "epochs": 27
+    },
+    {
+      "repeat": 1,
+      "seed": 42,
+      "fold": 3,
+      "epochs": 95
+    },
+    {
+      "repeat": 1,
+      "seed": 42,
+      "fold": 4,
+      "epochs": 99
+    },
+    {
+      "repeat": 1,
+      "seed": 7,
+      "fold": 0,
+      "epochs": 36
+    },
+    {
+      "repeat": 1,
+      "seed": 7,
+      "fold": 1,
+      "epochs": 75
+    },
+    {
+      "repeat": 1,
+      "seed": 7,
+      "fold": 2,
+      "epochs": 14
+    },
+    {
+      "repeat": 1,
+      "seed": 7,
+      "fold": 3,
+      "epochs": 31
+    },
+    {
+      "repeat": 1,
+      "seed": 7,
+      "fold": 4,
+      "epochs": 51
+    },
+    {
+      "repeat": 1,
+      "seed": 123,
+      "fold": 0,
+      "epochs": 7
+    },
+    {
+      "repeat": 1,
+      "seed": 123,
+      "fold": 1,
+      "epochs": 48
+    },
+    {
+      "repeat": 1,
+      "seed": 123,
+      "fold": 2,
+      "epochs": 76
+    },
+    {
+      "repeat": 1,
+      "seed": 123,
+      "fold": 3,
+      "epochs": 99
+    },
+    {
+      "repeat": 1,
+      "seed": 123,
+      "fold": 4,
+      "epochs": 96
+    },
+    {
+      "repeat": 2,
+      "seed": 42,
+      "fold": 0,
+      "epochs": 27
+    },
+    {
+      "repeat": 2,
+      "seed": 42,
+      "fold": 1,
+      "epochs": 89
+    },
+    {
+      "repeat": 2,
+      "seed": 42,
+      "fold": 2,
+      "epochs": 6
+    },
+    {
+      "repeat": 2,
+      "seed": 42,
+      "fold": 3,
+      "epochs": 27
+    },
+    {
+      "repeat": 2,
+      "seed": 42,
+      "fold": 4,
+      "epochs": 41
+    },
+    {
+      "repeat": 2,
+      "seed": 7,
+      "fold": 0,
+      "epochs": 96
+    },
+    {
+      "repeat": 2,
+      "seed": 7,
+      "fold": 1,
+      "epochs": 30
+    },
+    {
+      "repeat": 2,
+      "seed": 7,
+      "fold": 2,
+      "epochs": 37
+    },
+    {
+      "repeat": 2,
+      "seed": 7,
+      "fold": 3,
+      "epochs": 53
+    },
+    {
+      "repeat": 2,
+      "seed": 7,
+      "fold": 4,
+      "epochs": 14
+    },
+    {
+      "repeat": 2,
+      "seed": 123,
+      "fold": 0,
+      "epochs": 19
+    },
+    {
+      "repeat": 2,
+      "seed": 123,
+      "fold": 1,
+      "epochs": 47
+    },
+    {
+      "repeat": 2,
+      "seed": 123,
+      "fold": 2,
+      "epochs": 87
+    },
+    {
+      "repeat": 2,
+      "seed": 123,
+      "fold": 3,
+      "epochs": 33
+    },
+    {
+      "repeat": 2,
+      "seed": 123,
+      "fold": 4,
+      "epochs": 19
+    },
+    {
+      "repeat": 3,
+      "seed": 42,
+      "fold": 0,
+      "epochs": 32
+    },
+    {
+      "repeat": 3,
+      "seed": 42,
+      "fold": 1,
+      "epochs": 71
+    },
+    {
+      "repeat": 3,
+      "seed": 42,
+      "fold": 2,
+      "epochs": 27
+    },
+    {
+      "repeat": 3,
+      "seed": 42,
+      "fold": 3,
+      "epochs": 19
+    },
+    {
+      "repeat": 3,
+      "seed": 42,
+      "fold": 4,
+      "epochs": 39
+    },
+    {
+      "repeat": 3,
+      "seed": 7,
+      "fold": 0,
+      "epochs": 94
+    },
+    {
+      "repeat": 3,
+      "seed": 7,
+      "fold": 1,
+      "epochs": 99
+    },
+    {
+      "repeat": 3,
+      "seed": 7,
+      "fold": 2,
+      "epochs": 37
+    },
+    {
+      "repeat": 3,
+      "seed": 7,
+      "fold": 3,
+      "epochs": 31
+    },
+    {
+      "repeat": 3,
+      "seed": 7,
+      "fold": 4,
+      "epochs": 12
+    },
+    {
+      "repeat": 3,
+      "seed": 123,
+      "fold": 0,
+      "epochs": 13
+    },
+    {
+      "repeat": 3,
+      "seed": 123,
+      "fold": 1,
+      "epochs": 100
+    },
+    {
+      "repeat": 3,
+      "seed": 123,
+      "fold": 2,
+      "epochs": 37
+    },
+    {
+      "repeat": 3,
+      "seed": 123,
+      "fold": 3,
+      "epochs": 64
+    },
+    {
+      "repeat": 3,
+      "seed": 123,
+      "fold": 4,
+      "epochs": 9
+    }
+  ],
+  "repeat_metrics": [
+    {
+      "accuracy": 0.4083333333333333,
+      "balanced_accuracy": 0.40456043956043963,
+      "macro_f1": 0.3818068772491004
+    },
+    {
+      "accuracy": 0.38333333333333336,
+      "balanced_accuracy": 0.3813736263736264,
+      "macro_f1": 0.36274080029015265
+    },
+    {
+      "accuracy": 0.45,
+      "balanced_accuracy": 0.4006043956043956,
+      "macro_f1": 0.39596008589112036
+    },
+    {
+      "accuracy": 0.35,
+      "balanced_accuracy": 0.34989010989010993,
+      "macro_f1": 0.32911865495823517
+    }
+  ],
+  "cv": {
+    "n_splits": 5,
+    "n_repeats": 4,
+    "random_state": 42
+  },
+  "training_ids": [
+    "train_001",
+    "train_002",
+    "train_003",
+    "train_004",
+    "train_005",
+    "train_006",
+    "train_007",
+    "train_008",
+    "train_009",
+    "train_010",
+    "train_011",
+    "train_012",
+    "train_013",
+    "train_014",
+    "train_015",
+    "train_016",
+    "train_017",
+    "train_018",
+    "train_019",
+    "train_020",
+    "train_021",
+    "train_022",
+    "train_023",
+    "train_024",
+    "train_025",
+    "train_026",
+    "train_027",
+    "train_028",
+    "train_029",
+    "train_030",
+    "train_031",
+    "train_032",
+    "train_033",
+    "train_034",
+    "train_035",
+    "train_036",
+    "train_037",
+    "train_038",
+    "train_039",
+    "train_040",
+    "train_041",
+    "train_042",
+    "train_043",
+    "train_044",
+    "train_045",
+    "train_046",
+    "train_047",
+    "train_048",
+    "train_049",
+    "train_050",
+    "train_051",
+    "train_052",
+    "train_053",
+    "train_054",
+    "train_055",
+    "train_056",
+    "train_057",
+    "train_058",
+    "train_059",
+    "train_060",
+    "train_061",
+    "train_062",
+    "train_063",
+    "train_064",
+    "train_065",
+    "train_066",
+    "train_067",
+    "train_068",
+    "train_069",
+    "train_070",
+    "train_071",
+    "train_072",
+    "train_073",
+    "train_074",
+    "train_075",
+    "train_076",
+    "train_077",
+    "train_078",
+    "train_079",
+    "train_080",
+    "train_081",
+    "train_082",
+    "train_083",
+    "train_084",
+    "train_085",
+    "train_086",
+    "train_087",
+    "train_088",
+    "train_089",
+    "train_090",
+    "train_091",
+    "train_092",
+    "train_093",
+    "train_094",
+    "train_095",
+    "train_096",
+    "train_097",
+    "train_098",
+    "train_099",
+    "train_100",
+    "train_101",
+    "train_102",
+    "train_103",
+    "train_104",
+    "train_105",
+    "train_106",
+    "train_107",
+    "train_108",
+    "train_109",
+    "train_110",
+    "train_111",
+    "train_112",
+    "train_113",
+    "train_114",
+    "train_115",
+    "train_116",
+    "train_117",
+    "train_118",
+    "train_119",
+    "train_120"
+  ],
+  "classes": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "input_sha256": "9a6bf5837ac4713ca1c26559d03b4ce7deac3e43f79dc92db5d235670473a558",
+  "source_sha256": "c583d76ff6526c18cd70576e23a57bab4c1518668415e9a0727ba86b02e04b53",
+  "environment": {
+    "torch": "2.9.1+cu126",
+    "numpy": "2.5.2",
+    "pandas": "3.0.5",
+    "scikit-learn": "1.9.0"
+  },
+  "device": "cuda"
+}

@@ -57,12 +57,24 @@ token-submit:
 lint:
 	uv run ruff check src scripts
 
-.PHONY: depth-transformer test-depth-transformer
+.PHONY: depth-transformer test-depth-transformer autotransformer test-autotransformer ae-pca-mlp test-ae-pca-mlp
 depth-transformer:
 	$(PY_CNN) scripts/15_depth_transformer.py benchmark --device cuda --tag initial
 
 test-depth-transformer:
 	$(PY_CNN) -m unittest discover -s tests -v
+
+autotransformer:
+	$(PY_CNN) scripts/16_autotransformer.py benchmark --device cuda --tag initial
+
+test-autotransformer:
+	$(PY_CNN) -m unittest tests.test_autotransformer -v
+
+ae-pca-mlp:
+	$(PY_CNN) scripts/17_ae_pca_mlp.py benchmark --device cuda --tag g4_broadcast
+
+test-ae-pca-mlp:
+	$(PY_CNN) -m unittest tests.test_ae_pca_mlp -v
 
 clean-cache:
 	rm -rf cache/features cache/images cache/tokens cache/lines
