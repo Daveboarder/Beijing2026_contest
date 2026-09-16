@@ -76,5 +76,12 @@ ae-pca-mlp:
 test-ae-pca-mlp:
 	$(PY_CNN) -m unittest tests.test_ae_pca_mlp -v
 
+.PHONY: embedding-mlp test-embedding-mlp
+embedding-mlp:
+	$(PY_CNN) scripts/26_embedding_mlp.py --device cuda --n-repeats 10
+
+test-embedding-mlp:
+	$(PY_CNN) -m unittest tests.test_embedding_mlp -v
+
 clean-cache:
 	rm -rf cache/features cache/images cache/tokens cache/lines
