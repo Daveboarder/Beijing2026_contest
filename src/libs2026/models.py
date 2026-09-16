@@ -65,6 +65,46 @@ class PLSDA(ClassifierMixin, BaseEstimator):
         return self.classes_[np.asarray(self.decision_function(X)).argmax(axis=1)]
 
 
+class XGBLabelClassifier(ClassifierMixin, BaseEstimator):
+    """XGBoost classifier that accepts arbitrary labels (XGBoost itself wants 0..K-1).
+
+    Only available with the optional ``boosting`` extra (``uv sync --extra boosting``).
+    """
+
+    def __init__(self, n_estimators: int = 400, max_depth: int = 3, learning_rate: float = 0.05,
+                 subsample: float = 0.8, colsample_bytree: float = 0.8, reg_lambda: float = 1.0,
+                 min_child_weight: float = 1.0, n_jobs: int = 1, random_state: int = RANDOM_STATE,
+                 device: str = "cpu"):
+        self.n_estimators = n_estimators
+        self.max_depth = max_depth
+        self.learning_rate = learning_rate
+        self.subsample = subsample
+        self.colsample_bytree = colsample_bytree
+        self.reg_lambda = reg_lambda
+        self.min_child_weight = min_child_weight
+        self.n_jobs = n_jobs
+        self.random_state = random_state
+        self.device = device
+
+    def fit(self, X, y):
+        from xgboost import XGBClassifier
+
+        self.classes_, encoded = np.unique(np.asarray(y), return_inverse=True)
+        self.model_ = XGBClassifier(
+            n_estimators=self.n_estimators, max_depth=self.max_depth, learning_rate=self.learning_rate,
+            subsample=self.subsample, colsample_bytree=self.colsample_bytree, reg_lambda=self.reg_lambda,
+            min_child_weight=self.min_child_weight, tree_method="hist", objective="multi:softprob",
+            n_jobs=self.n_jobs, random_state=self.random_state, device=self.device,
+        ).fit(X, encoded)
+        return self
+
+    def predict_proba(self, X):
+        return self.model_.predict_proba(X)
+
+    def predict(self, X):
+        return self.classes_[self.predict_proba(X).argmax(axis=1)]
+
+
 class BinnedPCA(BaseEstimator, TransformerMixin):
     """Project each depth bin onto one shared spectral basis.
 
@@ -211,6 +251,16 @@ def build_model_zoo(n_pca: int = 30) -> dict[str, Pipeline]:
                                                    random_state=RANDOM_STATE)),
         ]),
     }
+    try:
+        import xgboost  # noqa: F401
+    except ImportError:  # optional "boosting" extra
+        return zoo
+    # pca_mlp with XGBoost in place of the MLP; single-threaded so CV repeats can run in parallel.
+    zoo["pca_xgb"] = Pipeline([
+        ("scale", scaler()),
+        ("pca", _pca(n_pca)),
+        ("clf", XGBLabelClassifier()),
+    ])
     return zoo
 
 

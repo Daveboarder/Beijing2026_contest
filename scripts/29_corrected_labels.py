@@ -136,7 +136,12 @@ def main() -> None:
             submissions[(name, label_set)] = sub.set_index("filename")["predicted_label"]
 
     table = pd.DataFrame(summary)
-    table.to_csv(cfg.metrics_dir / f"corrected_labels_g{args.n_groups}.csv", index=False)
+    # Merge with earlier runs of other models instead of overwriting them.
+    summary_path = cfg.metrics_dir / f"corrected_labels_g{args.n_groups}.csv"
+    if summary_path.exists():
+        previous = pd.read_csv(summary_path)
+        table = pd.concat([previous[~previous["model"].isin(table["model"])], table], ignore_index=True)
+    table.to_csv(summary_path, index=False)
     cols = ["model", "labels", "all120_accuracy", "all120_balanced_accuracy", "all120_f1_macro",
             "unchanged110_accuracy", "unchanged110_accuracy_std", "unchanged110_balanced_accuracy",
             "unchanged110_f1_macro"]
@@ -144,17 +149,23 @@ def main() -> None:
     print(table[cols].to_string(index=False, float_format=lambda v: f"{v:.3f}"))
 
     comp = pd.DataFrame({f"{m}_{ls}": s for (m, ls), s in submissions.items()})
-    comp.to_csv(cfg.metrics_dir / f"test_predictions_corrected_labels_g{args.n_groups}.csv")
+    comp_path = cfg.metrics_dir / f"test_predictions_corrected_labels_g{args.n_groups}.csv"
+    if comp_path.exists():
+        previous = pd.read_csv(comp_path, index_col=0)
+        comp = previous.drop(columns=[c for c in comp.columns if c in previous]).join(comp)
+    comp.to_csv(comp_path)
     print("\ntest set (60 samples):")
     for name in args.models.split(","):
         o, c = comp[f"{name}_original"], comp[f"{name}_corrected"]
         print(f"  {name}: {int((o != c).sum())} predictions change; class counts original "
               f"{np.bincount(o, minlength=6)[1:].tolist()} -> corrected {np.bincount(c, minlength=6)[1:].tolist()}")
-    names = args.models.split(",")
-    if len(names) == 2:
-        for ls in ("original", "corrected"):
-            agree = (comp[f"{names[0]}_{ls}"] == comp[f"{names[1]}_{ls}"]).mean()
-            print(f"  {names[0]} vs {names[1]} agreement on test ({ls} labels): {agree:.2f}")
+    # Pairwise test agreement across every model present, including earlier runs.
+    names = sorted({c.rsplit("_", 1)[0] for c in comp.columns})
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            agree = {ls: (comp[f"{a}_{ls}"] == comp[f"{b}_{ls}"]).mean() for ls in ("original", "corrected")}
+            print(f"  {a} vs {b} test agreement: original labels {agree['original']:.2f}, "
+                  f"corrected labels {agree['corrected']:.2f}")
 
 
 if __name__ == "__main__":
