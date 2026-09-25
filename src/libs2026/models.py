@@ -105,6 +105,20 @@ class XGBLabelClassifier(ClassifierMixin, BaseEstimator):
         return self.classes_[self.predict_proba(X).argmax(axis=1)]
 
 
+class DropComponents(BaseEstimator, TransformerMixin):
+    """Remove selected score columns (0-based), e.g. PC1 after a PCA step."""
+
+    def __init__(self, drop=(0,)):
+        self.drop = drop
+
+    def fit(self, X, y=None):
+        self.keep_ = np.setdiff1d(np.arange(np.asarray(X).shape[1]), np.asarray(self.drop, dtype=int))
+        return self
+
+    def transform(self, X):
+        return np.asarray(X)[:, self.keep_]
+
+
 class BinnedPCA(BaseEstimator, TransformerMixin):
     """Project each depth bin onto one shared spectral basis.
 
@@ -230,6 +244,15 @@ def build_model_zoo(n_pca: int = 30) -> dict[str, Pipeline]:
         "pca_mlp": Pipeline([
             ("scale", scaler()),
             ("pca", _pca(n_pca)),
+            ("scale2", scaler()),
+            ("clf", MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=2000,
+                                  alpha=1e-3, random_state=RANDOM_STATE)),
+        ]),
+        # pca_mlp without the first principal component (PCs 2..n_pca go to the MLP).
+        "pca_mlp_noPC1": Pipeline([
+            ("scale", scaler()),
+            ("pca", _pca(n_pca)),
+            ("drop", DropComponents((0,))),
             ("scale2", scaler()),
             ("clf", MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=2000,
                                   alpha=1e-3, random_state=RANDOM_STATE)),

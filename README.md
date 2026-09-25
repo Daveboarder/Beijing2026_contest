@@ -50,6 +50,7 @@ src/libs2026/             the library
   images.py               (shots x wavelengths) image tensors for the CNN
   lines_db.py             theoretical line dictionary (Saha-Boltzmann)
   tokens.py               Voigt fits per line -> spectral-line tokens
+  line_tokens.py          detected lines -> profile descriptors, line ranking
   cnn.py                  2-D CNNs over depth-spectrum images and tokens (torch)
   evaluation.py           grouped stratified CV, sample-level scoring
   plotting.py             figures
@@ -400,4 +401,136 @@ See [docs/ae_pca_mlp.md](docs/ae_pca_mlp.md).
 
 ```bash
 uv run --extra cnn python scripts/17_ae_pca_mlp.py benchmark --device cuda --tag g4_broadcast
+```
+
+## Data-driven line tokens: which lines carry the aging signal
+
+`scripts/31_line_tokens.py` (library: `src/libs2026/line_tokens.py`) takes the
+10 nm occlusion map of `scripts/27` down to single emission lines. Lines come
+from the measured spectrum, not from a theoretical dictionary. Each line is
+described in every 20-shot depth block, and lines are ranked by how much a
+classifier relies on them.
+
+* **Detection** on the training mean spectrum. A [1, 2, 1] / 4 kernel first
+  cancels the detectors' fixed even/odd pixel pattern (±10–15 %, strongest on
+  channel 3). Each wavelength is taken from one channel only (overlaps are
+  split at their midpoint). A peak must rise 5 noise sigmas within 21 pixels,
+  which lets through about 0.1 noise peaks per 1000 pixels. Result: 274 lines
+  (131 / 92 / 51 per channel).
+* **Tentative assignment** against the air line database. A per-channel
+  calibration offset is fitted on the strongest peaks (−0.034 / −0.052 /
+  −0.050 nm), and candidates are ranked by Saha-Boltzmann intensity with
+  abundance priors. 268 of 274 lines are assigned; `n_competing` and
+  `alternatives` flag blends.
+* **Tokens** hold 8 descriptors per line and depth block: area, height, width,
+  centroid shift, asymmetry, detected, continuum and continuum slope, shaped
+  `(samples, 10 blocks, lines, 8)`. The layout follows `tokens.py`, so
+  `TokenCNN(**tokens.cnn_kwargs(), ...)` can read them.
+* **Ranking** occludes one line's descriptors out-of-fold, inside a recursive
+  elimination: the weakest 30 % of lines are dropped, the rest re-ranked, so
+  redundant lines do not shield each other.
+
+Same grouped folds for every row (10 repeats), `pca_mlp` on the 10 depth blocks:
+
+| Representation | features | accuracy |
+| --- | --- | --- |
+| full spectrum | 12282 | 0.735 ± 0.026 |
+| 274 lines, all descriptors | 2192 | 0.708 ± 0.026 |
+| line only (no continuum) | 1644 | 0.694 ± 0.024 |
+| shape: width, shift, asymmetry | 822 | 0.684 ± 0.023 |
+| intensity: area, height | 548 | 0.634 ± 0.025 |
+| continuum: level, slope | 548 | 0.604 ± 0.032 |
+
+Accuracy of a K-line token set, with the lines ranked inside every training
+fold only (nested), against K random lines:
+
+| lines | 10 | 20 | 40 | 80 | 150 | 250 |
+| --- | --- | --- | --- | --- | --- | --- |
+| selected | 0.649 | 0.657 | 0.655 | 0.680 | 0.695 | 0.715 |
+| random | 0.588 | 0.594 | 0.629 | 0.654 | 0.682 | 0.718 |
+
+What this says about the spectra:
+
+- **Line shape matters more than line intensity.** Width, shift and asymmetry
+  alone (0.684) beat area and height (0.634). This is not a calibration drift:
+  removing each sample's common-mode line shift leaves per-line separability
+  unchanged.
+- **The valuable lines are self-absorption- and Stark-sensitive.** The top
+  line is H-alpha 656.3 nm, through its centroid shift, which orders the
+  levels 5 > 3–4 > 2 > 1 at every depth. It is in the top 80 of 94 % of
+  nested folds. Next come the strong, low-lying Fe I lines of 340–390 nm
+  (371.99, 374.56, 375.82, 364.78, 349.78, 357.01, 387.86, 385.99 nm),
+  N I 939.3 (width) and Cr I 435.2; 62 of the 80 selected lines sit on
+  channel 1. Selected Fe I lines start from lower levels than the unselected
+  ones (median E_i 0.96 vs 1.58 eV, Mann-Whitney p = 3e-4) at the same
+  signal-to-noise, i.e. they are the lines most prone to self-absorption.
+  Together with the Stark-sensitive H-alpha and N I lines, this points to the
+  aging level acting through plasma conditions (optical depth, electron
+  density; cf. n_e ρ = +0.42 in the Boltzmann analysis) more than through
+  composition.
+- **The information is spread out.** Ranked selection beats random lines by
+  about 6 points at 10–20 lines; the advantage is gone by 250. The default
+  export of 80 lines (640 features) keeps 0.680.
+- **Pixel and line importance only weakly agree.** Summed per 10 nm window,
+  line importance correlates only weakly with the pixel occlusion of
+  `scripts/27` (Spearman +0.13). Blanking pixels mostly removes intensity,
+  while the token model relies on line shape.
+
+The full-spectrum reference is re-run on the same folds: 0.735 here. The 0.752
+stored by `scripts/27`–`29` does not reproduce in the current environment;
+`scripts/29`'s own CV code gives 0.734 on the same seeds.
+
+```bash
+uv run python scripts/31_line_tokens.py --n-repeats 10 --n-jobs 10   # ~3 min; or: make line-tokens
+uv run python scripts/31_line_tokens.py --labels corrected           # scripts/29 label corrections
+uv run python -m unittest tests.test_line_tokens -v
+```
+
+Outputs: `results/metrics/line_tokens_lines.csv` (every line with geometry,
+assignment, rank, nested selection frequency, depth-resolved occlusion and the
+descriptor that best separates the levels), `line_tokens_benchmark.csv`,
+`line_tokens_selection.csv`, the figures `results/figures/line_tokens_*.png`,
+and the selected tokens in `cache/line_tokens/selected_top80.npz`:
+
+```python
+from libs2026 import LineTokens
+tokens = LineTokens.load("cache/line_tokens/selected_top80.npz")   # lines ordered by rank
+X_rows, y_rows, groups, ids = tokens.subset("train").rows()        # (1200, 80 * 8) for sklearn
+```
+
+### One signal area per line (`scripts/32_line_areas.py`)
+
+The same 274 lines are each reduced to a single number per depth block: the
+signal area between b1 and b2, the nearest inflection points left and right of
+the line centre. The bounds are found once on the smoothed training mean
+spectrum and are then fixed for every spectrum, like the `b1_w`/`b2_w` windows
+of `context/LIBSmethods.py`. For a Gaussian line they sit at ±σ, so b1..b2 is
+narrower than the line: a median of 3 px, about 0.8 × FWHM. The line windows
+are written to `results/metrics/line_areas_windows.csv`.
+
+Same folds as above, 10 repeats, MLP(128, 64) on 274 areas:
+
+| Area | MLP, no PCA | PCA(30) + MLP | PCA(120) + MLP |
+| --- | --- | --- | --- |
+| inflection, linear baseline | 0.572 | 0.557 | 0.623 |
+| inflection, LIBSmethods formula | 0.623 | 0.630 | 0.624 |
+| valleys (whole line), linear baseline | 0.569 | 0.574 | 0.593 |
+| *full spectrum, PCA(30) + MLP* | | *0.735* | |
+
+- **One area per line recovers only part of the signal**, about 0.57–0.63 against 0.735.
+  Balanced accuracy is lower still (0.47–0.58): the areas mostly
+  separate the two large classes (levels 2 and 3).
+- **Tuning doesn't close the gap.** Varying the MLP penalty (1e-3 to 10) or the
+  PCA width keeps the areas between 0.43 and 0.63. A few principal components
+  (5–20: 0.43–0.51) do worse than none, so the largest-variance directions of
+  the areas are not the class-relevant ones.
+- **The `LIBSmethods` formula scores highest partly by accident.** Its baseline
+  term is one pixel wide, not `b2 - b1` pixels, so the continuum under the line
+  stays in the "area". The continuum carries class information on its own.
+- **Window choice barely matters.** Inflection and valley bounds give about the
+  same accuracy. What the classifier needs, and a single area throws away, is
+  the line shape and the continuum (see the descriptor table above).
+
+```bash
+uv run python scripts/32_line_areas.py --n-repeats 10 --n-jobs 10   # ~35 s; or: make line-areas
 ```

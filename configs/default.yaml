@@ -115,6 +115,23 @@ tokens:
     # theoretical wavelength, otherwise the Voigt claims a neighbouring line.
     max_shift_pixels: 1.5
 
+# Data-driven spectral-line tokens (src/libs2026/line_tokens.py, scripts/31_line_tokens.py).
+# Lines are detected on the training mean spectrum instead of taken from a
+# theoretical dictionary, and every line in every depth block is described by
+# area, height, width, shift, asymmetry, detected, continuum, continuum_slope.
+# The line database and air/vacuum choice come from the tokens block above.
+line_tokens:
+  n_groups: 10              # depth rows = consecutive 20-shot blocks (best pca_mlp setting)
+  k_noise: 5.0              # peak prominence in sigmas of the smoothed-spectrum noise
+  noise_window: 401         # pixels of the running noise estimate
+  prominence_window: 21     # pixels; bounded prominence keeps noise peaks out (~0.1 / 1000 px)
+  max_extent: 4             # background anchors at most this many core half-widths away
+  # Tentative assignment only: candidates ranked by Saha-Boltzmann intensity,
+  # maximised over this Te grid (air N I / O I lines need the hot end).
+  te_grid: [7000.0, 10000.0, 13000.0]
+  ne: 1.0e+17
+  n_select: 80              # lines in the exported token set (cache/line_tokens/selected_top80.npz)
+
 output:
   submission_name: predictions.csv
 

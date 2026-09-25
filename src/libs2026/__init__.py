@@ -13,6 +13,7 @@ from .depth import (
 from .evaluation import CVResult, cross_validate_model, predict_scores, summarize
 from .features import FeatureSet, aggregate_predictions, build_features
 from .images import ImageSet, build_images
+from .line_tokens import LineTokenConfig, LineTokens, build_line_tokens
 from .lines_db import STEEL_ELEMENTS, LineDictionary, build_line_dictionary
 from .models import PLSDA, BinnedPCA, build_depth_zoo, build_model_zoo, get_model
 from .preprocessing import Preprocessor
@@ -37,6 +38,8 @@ __all__ = [
     "FitConfig",
     "ImageSet",
     "LineDictionary",
+    "LineTokenConfig",
+    "LineTokens",
     "Preprocessor",
     "FeatureSet",
     "PLSDA",
@@ -49,6 +52,7 @@ __all__ = [
     "build_features",
     "build_images",
     "build_line_dictionary",
+    "build_line_tokens",
     "build_model_zoo",
     "build_tokens",
     "aggregate_predictions",

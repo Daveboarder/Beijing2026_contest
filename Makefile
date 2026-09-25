@@ -76,6 +76,16 @@ ae-pca-mlp:
 test-ae-pca-mlp:
 	$(PY_CNN) -m unittest tests.test_ae_pca_mlp -v
 
+.PHONY: line-tokens line-areas test-line-tokens
+line-tokens:
+	$(PY) scripts/31_line_tokens.py --n-repeats 10 --n-jobs $(N_JOBS)
+
+line-areas:
+	$(PY) scripts/32_line_areas.py --n-repeats 10 --n-jobs $(N_JOBS)
+
+test-line-tokens:
+	$(PY) -m unittest tests.test_line_tokens -v
+
 .PHONY: embedding-mlp test-embedding-mlp
 embedding-mlp:
 	$(PY_CNN) scripts/26_embedding_mlp.py --device cuda --n-repeats 10
@@ -84,4 +94,4 @@ test-embedding-mlp:
 	$(PY_CNN) -m unittest tests.test_embedding_mlp -v
 
 clean-cache:
-	rm -rf cache/features cache/images cache/tokens cache/lines
+	rm -rf cache/features cache/images cache/tokens cache/lines cache/line_tokens
