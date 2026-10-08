@@ -93,5 +93,15 @@ embedding-mlp:
 test-embedding-mlp:
 	$(PY_CNN) -m unittest tests.test_embedding_mlp -v
 
+.PHONY: bimamba bimamba-smoke test-bimamba
+bimamba:
+	$(PY_CNN) scripts/33_bimamba.py benchmark --device cuda --labels both --tag initial
+
+bimamba-smoke:
+	$(PY_CNN) scripts/33_bimamba.py benchmark --device cuda --labels both --smoke --tag smoke
+
+test-bimamba:
+	$(PY_CNN) -m unittest tests.test_bimamba -v
+
 clean-cache:
 	rm -rf cache/features cache/images cache/tokens cache/lines cache/line_tokens

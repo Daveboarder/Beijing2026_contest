@@ -182,3 +182,35 @@ ae_pca_mlp:
   mlp_alpha: 0.0001
   mlp_max_iter: 2000
   seeds: [42, 7, 123]
+
+# Bidirectional Mamba (pure PyTorch selective scan) over wavelength patches of
+# the region-pooled spectra and over the depth tokens; learned-query cross-path
+# attention + content gate fusion; three-head logit ensemble with auxiliary
+# losses. Preparation mirrors depth_transformer (shared prepare_sample).
+bimamba:
+  bin_factor: 4
+  surface_shots: 20
+  late_bin: 4
+  bulk_start: 140
+  d_model: 64
+  d_state: 16
+  n_layers: 1
+  # Wavelength patch per channel: 1023 binned pixels = 11 * 93 -> 93 tokens per
+  # channel, 279 spectral tokens in total. Must divide every channel width.
+  patch: 11
+  # Chunk of the scan: sequential steps = chunk + ceil(L / chunk).
+  chunk: 16
+  n_queries: 4
+  stem_bins: 4
+  dropout: 0.2
+  lambda_aux: 0.3
+  noise_std: 0.05
+  token_dropout: 0.1
+  epochs: 100
+  patience: 15
+  batch_size: 8
+  lr: 0.0003
+  weight_decay: 0.001
+  seeds: [42, 7, 123]
+  # full = both paths + fusion; spectral / depth = one path; concat = no attention/gate.
+  variants: [full, spectral, depth, concat]
