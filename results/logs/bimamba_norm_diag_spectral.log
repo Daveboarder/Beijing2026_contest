@@ -1,0 +1,2 @@
+PerColumn          spectral  test_acc 0.350 train_acc 0.500 epochs [9, 23, 27, 27, 15] 919s
+BiMambaClassifier  spectral  test_acc 0.325 train_acc 0.387 epochs [23, 23, 23, 32, 27] 1102s

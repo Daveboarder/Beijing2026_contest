@@ -54,6 +54,7 @@ src/libs2026/             the library
   cnn.py                  2-D CNNs over depth-spectrum images and tokens (torch)
   evaluation.py           grouped stratified CV, sample-level scoring
   plotting.py             figures
+  bimamba.py              bidirectional Mamba over wavelength and depth (torch)
 scripts/                  numbered pipeline stages, run in order
 cache/                    generated binary data (git-ignored)
 results/                  metrics, figures, fitted models, OOF predictions
@@ -401,6 +402,20 @@ See [docs/ae_pca_mlp.md](docs/ae_pca_mlp.md).
 
 ```bash
 uv run --extra cnn python scripts/17_ae_pca_mlp.py benchmark --device cuda --tag g4_broadcast
+```
+
+## Bidirectional Mamba (spectral + depth pathways)
+
+A selective state-space model on the same depth sequences as the depth
+transformer: one bidirectional Mamba block reads the region-pooled spectrum as
+279 wavelength patches, another reads the 65 depth tokens, and learned queries
+with a content gate fuse the two paths before a three-head logit ensemble, all
+trained end to end at a cost linear in sequence length. The benchmark runs on
+the original and the corrected labels over identical folds. See
+[docs/bimamba.md](docs/bimamba.md).
+
+```bash
+uv run --extra cnn python scripts/33_bimamba.py benchmark --device cuda --labels both --tag initial
 ```
 
 ## Data-driven line tokens: which lines carry the aging signal

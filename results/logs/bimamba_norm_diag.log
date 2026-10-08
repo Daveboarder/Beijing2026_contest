@@ -1,0 +1,34 @@
+Traceback (most recent call last):
+  File "/tmp/diag_bimamba_norm.py", line 26, in <module>
+    m.fit(X[tr], y[tr])
+  File "/mnt/data/projects/Running_projects/26_0161_LIBS_data_challenge_2026/Methods/David/Beijing2026_contest/src/libs2026/bimamba.py", line 469, in fit
+    return super().fit(X, y)
+           ^^^^^^^^^^^^^^^^^
+  File "/mnt/data/projects/Running_projects/26_0161_LIBS_data_challenge_2026/Methods/David/Beijing2026_contest/src/libs2026/depth_transformer.py", line 286, in fit
+    _, self.best_epoch_ = self._train(
+                          ^^^^^^^^^^^^
+  File "/mnt/data/projects/Running_projects/26_0161_LIBS_data_challenge_2026/Methods/David/Beijing2026_contest/src/libs2026/bimamba.py", line 483, in _train
+    net = self._net()
+          ^^^^^^^^^^^
+  File "/mnt/data/projects/Running_projects/26_0161_LIBS_data_challenge_2026/Methods/David/Beijing2026_contest/src/libs2026/bimamba.py", line 480, in _net
+    ).to(self.device)
+      ^^^^^^^^^^^^^^^
+  File "/mnt/data/projects/Running_projects/26_0161_LIBS_data_challenge_2026/Methods/David/Beijing2026_contest/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1371, in to
+    return self._apply(convert)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/data/projects/Running_projects/26_0161_LIBS_data_challenge_2026/Methods/David/Beijing2026_contest/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 930, in _apply
+    module._apply(fn)
+  File "/mnt/data/projects/Running_projects/26_0161_LIBS_data_challenge_2026/Methods/David/Beijing2026_contest/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 930, in _apply
+    module._apply(fn)
+  File "/mnt/data/projects/Running_projects/26_0161_LIBS_data_challenge_2026/Methods/David/Beijing2026_contest/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 957, in _apply
+    param_applied = fn(param)
+                    ^^^^^^^^^
+  File "/mnt/data/projects/Running_projects/26_0161_LIBS_data_challenge_2026/Methods/David/Beijing2026_contest/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1357, in convert
+    return t.to(
+           ^^^^^
+torch.AcceleratorError: CUDA error: CUDA-capable device(s) is/are busy or unavailable
+Search for `cudaErrorDevicesUnavailable' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
