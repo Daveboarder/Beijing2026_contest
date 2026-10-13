@@ -182,3 +182,73 @@ ae_pca_mlp:
   mlp_alpha: 0.0001
   mlp_max_iter: 2000
   seeds: [42, 7, 123]
+
+# Bidirectional Mamba (pure PyTorch selective scan) over wavelength patches of
+# the region-pooled spectra and over the depth tokens; learned-query cross-path
+# attention + content gate fusion; three-head logit ensemble with auxiliary
+# losses. Preparation mirrors depth_transformer (shared prepare_sample).
+bimamba:
+  bin_factor: 4
+  surface_shots: 20
+  late_bin: 4
+  bulk_start: 140
+  d_model: 64
+  d_state: 16
+  n_layers: 1
+  # Wavelength patch per channel: 1023 binned pixels = 11 * 93 -> 93 tokens per
+  # channel, 279 spectral tokens in total. Must divide every channel width.
+  patch: 11
+  # Chunk of the scan: sequential steps = chunk + ceil(L / chunk).
+  chunk: 16
+  n_queries: 4
+  stem_bins: 4
+  dropout: 0.2
+  lambda_aux: 0.3
+  noise_std: 0.05
+  token_dropout: 0.1
+  epochs: 100
+  patience: 15
+  batch_size: 8
+  lr: 0.0003
+  weight_decay: 0.001
+  seeds: [42, 7, 123]
+  # full = both paths + fusion; spectral / depth = one path; concat = no attention/gate.
+  variants: [full, spectral, depth, concat]
+
+# 2-D CNN + vision transformer embedding of depth-spectrum images (rows = depth,
+# columns = wavelength bins), trained episodically with prototype losses as in
+# the ViT-CNN-BS article, classified by an RBF SVM / MLP / nearest prototype.
+cnn_vit:
+  bin_factor: 8          # wavelength bins per column: 3 x 511 = 1533 columns
+  drop_shots: 20         # the unstable surface shots are omitted
+  shot_bin: 4            # (200 - 20) / 4 = 45 depth rows
+  n_bands: 0             # supervised band selection; 0 keeps all columns
+  channels: [16, 32]
+  d_model: 64
+  pool: [9, 24]          # token grid (depth x wavelength) -> 216 tokens + class token
+  n_layers: 2
+  n_heads: 4
+  ff_dim: 128
+  dropout: 0.1
+  stride: 4
+  # loss and mix_queries are set per variant by `--variants proto|proto_mix|ce` of
+  # scripts/34_cnn_vit.py (proto = episodic prototype loss, proto_mix adds the
+  # attention-guided synthetic queries of the article, ce = cross-entropy head);
+  # the two keys below are informational only.
+  loss: proto
+  n_support: 3
+  n_query: 4
+  mix_queries: false
+  mix_weight: 0.5
+  crop_min: 0.8          # CenterCrop+Resize keeps 80-100 % of rows and columns
+  noise_std: 0.0
+  episodes: 600
+  eval_every: 20
+  patience: 5
+  lr: 0.001
+  weight_decay: 0.001
+  svm_c: 1.0
+  mlp_hidden: [128, 64]
+  mlp_alpha: 0.001
+  seeds: [42, 7, 123]
+  heads: [svm, mlp, proto]

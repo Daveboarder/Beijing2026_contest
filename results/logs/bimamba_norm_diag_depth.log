@@ -1,0 +1,2 @@
+PerColumn          depth     test_acc 0.450 train_acc 0.764 epochs [37, 25, 38, 48, 70] 2341s
+BiMambaClassifier  depth     test_acc 0.333 train_acc 0.400 epochs [9, 41, 45, 17, 20] 729s

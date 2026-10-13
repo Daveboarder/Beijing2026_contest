@@ -62,6 +62,9 @@ def predict_scores(model, X, classes) -> np.ndarray:
         proba = np.asarray(model.predict_proba(X), dtype=float)
     else:
         scores = np.asarray(model.decision_function(X), dtype=float)
+        if scores.ndim == 1:
+            # Binary SVMs return one margin; expand it to one score per class.
+            scores = np.stack([-scores, scores], axis=1)
         scores = scores - scores.max(axis=1, keepdims=True)
         proba = np.exp(scores)
         proba /= proba.sum(axis=1, keepdims=True)
