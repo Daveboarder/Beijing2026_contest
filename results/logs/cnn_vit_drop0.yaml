@@ -1,0 +1,254 @@
+# Configuration for the LIBS 2026 steel aging-state classification contest.
+# Paths may be absolute or relative to the project root.
+
+paths:
+  raw_data: ../../../Data/competition_data_release/competition_data_release
+  cache: cache
+  results: results
+  submissions: submissions
+
+data:
+  # The 200 shots are fired into one spot, so shot index is a depth coordinate
+  # and their order is meaningful. Never shuffle or drop shots.
+  n_shots: 200
+  n_wavelengths: 12282
+  # Row index where each spectrometer channel starts (last entry = end of array).
+  channel_bounds: [0, 4094, 8188, 12282]
+
+features:
+  # mean | mean_lines | lines | depth_bins | depth_contrast | depth_profile | mean_depth
+  # (see src/libs2026/depth.py). Shot index is a depth coordinate: steel ages
+  # from the surface inwards, so the spectrum *changes* from shot 1 to 200.
+  # Full-spectrum depth encodings are noise-dominated; mean_lines keeps the
+  # average spectrum and appends compact depth curves of diagnostic lines.
+  encoding: mean_lines
+  n_bins: 8                 # log-spaced depth bins, fine near the surface
+  # blocks | interleaved | surface: how the n_groups rows per sample are drawn.
+  # "surface" uses only the first half of the depth profile (where classes
+  # separate) and avoids labelling deep bulk shots with the aging level.
+  # "blocks" over the full 200 shots is still competitive as data augmentation.
+  augment: surface
+
+preprocessing:
+  # Outlier shots are repaired by interpolation, never deleted: shot index is
+  # the depth coordinate, so removing a shot would shift the whole profile.
+  repair_outlier_shots: true
+  outlier_z: 4.0
+  # Outliers are judged against the local depth trend over this many neighbouring
+  # shots. A global threshold would flag the whole (informative) surface region.
+  outlier_window: 11
+  # Trailing fraction of shots treated as unaffected bulk material.
+  bulk_fraction: 0.3
+  # "bulk" derives one intensity scale per sample from the bulk shots and keeps
+  # the depth intensity profile; "shot" rescales every shot and flattens it away.
+  # Keep "bulk" when using mean_lines / depth encodings so dip depths stay
+  # meaningful. "shot" can still help pure mean-spectrum baselines.
+  normalization_reference: bulk
+  # Baseline removal is off on purpose: the sweep in
+  # results/metrics/preprocessing_sweep_g1_b1.csv shows SNIP costs ~5 accuracy
+  # points, i.e. the plasma continuum itself carries aging information.
+  baseline: none            # none | snip
+  snip_iterations: 40
+  normalization: l2         # none | tic | max | snv | l2
+  # Wavelength region kept for modelling (nm). null = keep everything.
+  wl_min: null
+  wl_max: null
+
+cv:
+  n_splits: 5
+  n_repeats: 4
+  random_state: 42
+
+cnn:
+  # Wavelength / shot binning for the 2-D CNN image. Defaults yield ~50 x 1533.
+  bin_factor: 8
+  shot_bin: 4
+  # Per-fold spectral PCA width; 0 disables it (not recommended with N=120).
+  spectral_pca: 48
+  epochs: 180
+  batch_size: 16
+  lr: 0.001
+  dropout: 0.35
+  # Compact net; single-seed CV is noisy (~0.43–0.52), 5-seed ensemble ~0.57.
+  channels: [32, 64, 128]
+  ensemble_seeds: [42, 7, 123, 99, 2026]
+
+# Spectral-line tokenization: each spectrum becomes a sequence of physical
+# transitions instead of 12282 wavelength bins (see src/libs2026/tokens.py).
+tokens:
+  # Line database from the LIBS foundation-model project. These measurements
+  # were taken in air, so the air database is required: the vacuum variant is
+  # offset by ~0.07-0.12 nm, which is larger than the pixel step and measurably
+  # degrades the fits (12.1% valid / 0.119 nm median offset, against
+  # 16.8% / 0.047 nm for air under identical settings).
+  db_path: /mnt/data/projects/Running_projects/26_0153_Foundation_model/Methods/LIBS_foundation/external_data/Source/LIBS_data.db
+  # Steel matrix plus the ambient species always present in a LIBS plasma.
+  elements: [Fe, Cr, Ni, Mn, Si, Mo, V, Cu, Ti, Al, C, H, O, N]
+  # Saha-Boltzmann grid used to rank lines by theoretical intensity.
+  te_range: [6500.0, 11000.0]
+  # The +  is required: YAML reads 1.0e17 as a string, 1.0e+17 as a float.
+  ne_range: [1.0e+17, 5.0e+17]
+  n_te: 10
+  n_ne: 10
+  # Keep the strongest 10% of each element's lines (all of them below min_keep).
+  percent: 10.0
+  min_keep: 10
+  # Drop lines closer together than this many detector pixels. The raw list is
+  # finer than the spectrometer (median spacing 0.10 nm against a 0.08-0.18 nm
+  # resolution limit), so without this 65% of tokens share their peak with a
+  # neighbour and the static physics channels end up describing the wrong
+  # transition. Set to 0 to keep every line.
+  min_separation_pixels: 2.0
+  # Consecutive shots averaged before fitting; 4 gives 50 depth rows.
+  shot_bin: 4
+  fit:
+    window_nm: 0.3
+    gamma_init: 0.1
+    sigma_init: 0.006
+    # Keep every converged fit and let the r2 channel carry the confidence.
+    # The upstream 0.85 gate zeroes ~80% of tokens (20% valid vs 74% at 0.0).
+    r2_min: 0.0
+    # Skip lines buried in noise: absent transitions carry no information.
+    min_snr: 3.0
+    maxfev: 600
+    # Fitted centroid may not walk more than this many pixels from the
+    # theoretical wavelength, otherwise the Voigt claims a neighbouring line.
+    max_shift_pixels: 1.5
+
+# Data-driven spectral-line tokens (src/libs2026/line_tokens.py, scripts/31_line_tokens.py).
+# Lines are detected on the training mean spectrum instead of taken from a
+# theoretical dictionary, and every line in every depth block is described by
+# area, height, width, shift, asymmetry, detected, continuum, continuum_slope.
+# The line database and air/vacuum choice come from the tokens block above.
+line_tokens:
+  n_groups: 10              # depth rows = consecutive 20-shot blocks (best pca_mlp setting)
+  k_noise: 5.0              # peak prominence in sigmas of the smoothed-spectrum noise
+  noise_window: 401         # pixels of the running noise estimate
+  prominence_window: 21     # pixels; bounded prominence keeps noise peaks out (~0.1 / 1000 px)
+  max_extent: 4             # background anchors at most this many core half-widths away
+  # Tentative assignment only: candidates ranked by Saha-Boltzmann intensity,
+  # maximised over this Te grid (air N I / O I lines need the hot end).
+  te_grid: [7000.0, 10000.0, 13000.0]
+  ne: 1.0e+17
+  n_select: 80              # lines in the exported token set (cache/line_tokens/selected_top80.npz)
+
+output:
+  submission_name: predictions.csv
+
+# Shared wavelength CNN -> depth encoder -> end-to-end five-class MLP.
+# This experiment has its own preprocessing: repaired, shot-L2 spectra plus
+# log1p channel intensity relative to the trailing bulk shots; no baseline removal.
+depth_transformer:
+  bin_factor: 4
+  surface_shots: 20
+  late_bin: 4
+  bulk_start: 140
+  epochs: 100
+  patience: 15
+  batch_size: 8
+  lr: 0.0003
+  dropout: 0.2
+  seeds: [42, 7, 123]
+
+# Transformer autoencoder on the same raw depth sequences: sinusoidal wavelength
+# PE, glued CLS representation, MSE reconstruction + MLP with one-hot class targets.
+autotransformer:
+  # Preparation mirrors depth_transformer (shared prepare_sample / depth windows).
+  bin_factor: 4
+  surface_shots: 20
+  late_bin: 4
+  d_model: 64
+  n_layers: 2
+  n_heads: 4
+  ff_dim: 128
+  dropout: 0.1
+  lambda_recon: 1.0
+  epochs: 100
+  patience: 15
+  batch_size: 8
+  lr: 0.0003
+  weight_decay: 0.001
+  seeds: [42, 7, 123]
+
+# Fuse autoencoder CLS embeddings with PCA(mean_lines) scores, then MLP.
+# Classical side uses n_groups=4; each sample CLS is broadcast onto its rows.
+# AE prep/hparams fall back to autotransformer when omitted here.
+ae_pca_mlp:
+  encoding: mean_lines
+  n_groups: 4
+  classical_bin_factor: 1
+  n_pca: 30
+  mlp_hidden: [256, 128]
+  mlp_alpha: 0.0001
+  mlp_max_iter: 2000
+  seeds: [42, 7, 123]
+
+# Bidirectional Mamba (pure PyTorch selective scan) over wavelength patches of
+# the region-pooled spectra and over the depth tokens; learned-query cross-path
+# attention + content gate fusion; three-head logit ensemble with auxiliary
+# losses. Preparation mirrors depth_transformer (shared prepare_sample).
+bimamba:
+  bin_factor: 4
+  surface_shots: 20
+  late_bin: 4
+  bulk_start: 140
+  d_model: 64
+  d_state: 16
+  n_layers: 1
+  # Wavelength patch per channel: 1023 binned pixels = 11 * 93 -> 93 tokens per
+  # channel, 279 spectral tokens in total. Must divide every channel width.
+  patch: 11
+  # Chunk of the scan: sequential steps = chunk + ceil(L / chunk).
+  chunk: 16
+  n_queries: 4
+  stem_bins: 4
+  dropout: 0.2
+  lambda_aux: 0.3
+  noise_std: 0.05
+  token_dropout: 0.1
+  epochs: 100
+  patience: 15
+  batch_size: 8
+  lr: 0.0003
+  weight_decay: 0.001
+  seeds: [42, 7, 123]
+  # full = both paths + fusion; spectral / depth = one path; concat = no attention/gate.
+  variants: [full, spectral, depth, concat]
+
+# 2-D CNN + vision transformer embedding of depth-spectrum images (rows = depth,
+# columns = wavelength bins), trained episodically with prototype losses as in
+# the ViT-CNN-BS article, classified by an RBF SVM / MLP / nearest prototype.
+cnn_vit:
+  bin_factor: 8          # wavelength bins per column: 3 x 511 = 1533 columns
+  drop_shots: 0          # keep the surface shots: 200 / 4 = 50 depth rows
+  shot_bin: 4            # (200 - 20) / 4 = 45 depth rows
+  n_bands: 0             # supervised band selection; 0 keeps all columns
+  channels: [16, 32]
+  d_model: 64
+  pool: [9, 24]          # token grid (depth x wavelength) -> 216 tokens + class token
+  n_layers: 2
+  n_heads: 4
+  ff_dim: 128
+  dropout: 0.1
+  stride: 4
+  # loss and mix_queries are set per variant by `--variants proto|proto_mix|ce` of
+  # scripts/34_cnn_vit.py (proto = episodic prototype loss, proto_mix adds the
+  # attention-guided synthetic queries of the article, ce = cross-entropy head);
+  # the two keys below are informational only.
+  loss: proto
+  n_support: 3
+  n_query: 4
+  mix_queries: false
+  mix_weight: 0.5
+  crop_min: 0.8          # CenterCrop+Resize keeps 80-100 % of rows and columns
+  noise_std: 0.0
+  episodes: 600
+  eval_every: 20
+  patience: 5
+  lr: 0.001
+  weight_decay: 0.001
+  svm_c: 1.0
+  mlp_hidden: [128, 64]
+  mlp_alpha: 0.001
+  seeds: [42, 7, 123]
+  heads: [svm, mlp, proto]
